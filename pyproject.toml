@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "ER-crawler"
+version = "0.1.0"
+description = "A Eternal Return crawling for Data Analysis using Docker and Poetry"
+authors = ["JSJ <ksj006151@gmail.com>"]
+packages = [
+    { include = "scripts" }
+]
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+requests = "^2.32.3"
+python-dotenv = "^1.0.1"
+pymysql = "^1.1.0"
+tqdm = "^4.67.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
