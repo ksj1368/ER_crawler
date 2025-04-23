@@ -373,7 +373,7 @@ def parse_match_user_gain_credit(data: dict) -> List[dict]:
             "total_gain_cr": user_json["totalGainVFCredit"],
             "start_cr": credit_source["PreliminaryPhase"],
             "time_elapse_cr": credit_source["TimeElapsedCompensationByMiliSecond"],
-            "time_elapse_bonus_cr": int(credit_source["TimeElapsedCreditBonusByMiliSecond"]),
+            "time_elapse_bonus_cr": int(credit_source.get("TimeElapsedCreditBonusByMiliSecond",0)),
             "wild_dog_cr": credit_source.get("KillWildDog", 0),
             "bat_cr": credit_source.get("KillBat", 0),
             "chicken_cr": credit_source.get("KillChicken", 0),
