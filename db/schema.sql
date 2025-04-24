@@ -29,7 +29,7 @@ CREATE TABLE game_character
 CREATE TABLE match_info
 (
   match_id      INT       NOT NULL,
-  start_dtm     INT       NOT NULL,
+  start_dtm     TIMESTAMP NOT NULL,
   match_mode    TINYINT   NOT NULL COMMENT '솔로, 듀오, 스쿼드',
   season_id     SMALLINT  NOT NULL,
   version_major SMALLINT  NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE match_info
   weather_sub   MEDIUMINT NOT NULL,
   match_size    TINYINT   NOT NULL,
   match_avg_mmr SMALLINT  NOT NULL,
-  match_end     SMALLINT  NOT NULL,
+  match_expire_dtm    TIMESTAMP  NOT NULL,
   PRIMARY KEY (match_id)
 );
 
@@ -48,9 +48,7 @@ CREATE TABLE match_team_info
   team_id                                  INT       NOT NULL,
   team_ranking                             TINYINT   NOT NULL,
   escape_state                             TINYINT   NOT NULL,
-  expire_dtm                               TIMESTAMP NOT NULL,
   player_down                              TINYINT   NOT NULL,
-  total_play_time                          SMALLINT  NOT NULL,
   team_down_in_auto_reserrection           TINYINT   NOT NULL,
   team_down_after_auto_reserrection        TINYINT   NOT NULL,
   team_repeat_down_in_auto_reserrection    TINYINT   NOT NULL,
@@ -90,7 +88,6 @@ CREATE TABLE match_user_basic
   tactical_skill_count        SMALLINT  NOT NULL,
   credit_revival_count        TINYINT   NOT NULL,
   credit_revival_other_count  TINYINT   NOT NULL,
-  user_end_time               TIMESTAMP NOT NULL,
   PRIMARY KEY (match_id, user_id)
 );
 
@@ -127,7 +124,7 @@ CREATE TABLE match_user_equipment
 (
   match_id               INT       NOT NULL,
   user_id                INT       NOT NULL,
-  equipment_weapon       MEDIUMINT NULL    ,
+  equipment_weapon       MEDIUMINT NOT NULL    ,
   equipment_chest        MEDIUMINT NOT NULL,
   equipment_head         MEDIUMINT NOT NULL,
   equipment_arm          MEDIUMINT NOT NULL,
@@ -146,7 +143,7 @@ CREATE TABLE match_user_gain_credit
   user_id              INT      NOT NULL,
   total_gain_cr        SMALLINT NOT NULL,
   start_cr             SMALLINT NOT NULL,
-  time_elapse_cr       SMALLINT NULL    ,
+  time_elapse_cr       SMALLINT NOT NULL    ,
   time_elapse_bonus_cr SMALLINT NOT NULL,
   wild_dog_cr          SMALLINT NOT NULL,
   bat_cr               SMALLINT NOT NULL,
@@ -232,13 +229,13 @@ CREATE TABLE match_user_stat
 
 CREATE TABLE match_user_trait
 (
-  user_id          INT NULL    ,
-  match_id         INT NULL    ,
-  core_trait_id    INT NULL    ,
-  first_trait_id1  INT NULL    ,
-  first_trait_id2  INT NULL    ,
-  second_trait_id1 INT NULL    ,
-  second_trait_id2 INT NULL    ,
+  user_id          INT NOT NULL,
+  match_id         INT NOT NULL,
+  core_trait_id    INT NOT NULL,
+  first_trait_id1  INT NOT NULL,
+  first_trait_id2  INT NOT NULL,
+  second_trait_id1 INT NOT NULL,
+  second_trait_id2 INT NOT NULL,
   PRIMARY KEY (user_id, match_id)
 );
 
