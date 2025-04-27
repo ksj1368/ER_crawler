@@ -1,8 +1,8 @@
 import asyncio
 from time import time, sleep
-from multiprocessing import Pool, cpu_count, Manager
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from parser import parse_match_data, top_ranker_id, parse_game_character, parse_equipment, parse_trait_info, parse_txt_to_dict
+from multiprocessing import cpu_count
+from concurrent.futures import ProcessPoolExecutor
+from parsing import parse_match_data, top_ranker_id, parse_game_character, parse_equipment, parse_trait_info, parse_txt_to_dict
 from crawler import (
     get_top_ranker, match_info, get_character, get_equipment, get_trait, get_l10n, 
     get_match_ids_async, get_match_infos_async
@@ -268,4 +268,4 @@ if __name__ == "__main__":
     # 처리 결과 요약
     elapsed_time = time() - start_time
     logger.info(f"Total Data collection completed in {elapsed_time:.2f} seconds")
-    logger.info(f"Collection Summary: {success_count}/{total_count} matches processed successfully")
+    logger.info(f"Collection Summary: {sum_success_count}/{sum_total_count} matches processed successfully")
