@@ -1,28 +1,82 @@
 
 CREATE TABLE equipment
 (
-  equipment_id    MEDIUMINT   NOT NULL,
-  equipment_type  VARCHAR(16) NOT NULL,
-  equipment_grade TINYINT     NOT NULL,
-  equipment_name  VARCHAR(16) NOT NULL,
+  equipment_id              MEDIUMINT     NOT NULL,
+  equipment_name            VARCHAR(16)   NOT NULL,
+  equipment_main_type       VARCHAR(16)   NOT NULL,
+  equipment_sub_type        VARCHAR(16)   NOT NULL,
+  equipment_grade           TINYINT       NOT NULL,
+  attack_power              TINYINT       NOT NULL,
+  attack_power_bylv         TINYINT       NOT NULL,
+  defense                   TINYINT       NOT NULL,
+  defense_bylv              TINYINT       NOT NULL,
+  skill_amp                 TINYINT       NOT NULL,
+  skill_amp_bylv            TINYINT       NOT NULL,
+  skill_amp_ratio           TINYINT       NOT NULL,
+  adaptive_force            TINYINT       NOT NULL,
+  max_hp                    SMALLINT      NOT NULL,
+  max_hp_bylv               TINYINT       NOT NULL,
+  max_sp                    SMALLINT      NOT NULL,
+  hp_regen_percent          SMALLINT      NOT NULL,
+  sp_regen_percent          SMALLINT      NOT NULL,
+  attack_speed_percent      TINYINT       NOT NULL,
+  critical_percent          TINYINT       NOT NULL,
+  critical_damage_percent   TINYINT       NOT NULL,
+  cooldown_percent          TINYINT       NOT NULL,
+  lifeSteal_percent         TINYINT       NOT NULL,
+  normal_life_steel         TINYINT       NOT NULL,
+  move_speed                FLOAT         NOT NULL,
+  move_speed_percent        FLOAT         NOT NULL,
+  sight_range               TINYINT       NOT NULL,
+  penetration_defense       TINYINT       NOT NULL,
+  slow_resist_percent       TINYINT       NOT NULL,
+  cooldown_limit_percent    TINYINT       NOT NULL,
+  tenacity_percent          TINYINT       NOT NULL,
+  unique_skill_amp_percent  TINYINT       NOT NULL,
   PRIMARY KEY (equipment_id)
 );
 
 CREATE TABLE game_character
 (
   character_id       INT         NOT NULL,
-  character_name     VARCHAR(12) NOT NULL,
+  character_name     VARCHAR(24) NOT NULL,
   attack_power       INT         NOT NULL,
   defense            INT         NOT NULL,
   skill_amp          INT         NOT NULL,
-  max_hp             INT         NOT NULL,
-  max_sp             INT         NOT NULL,
-  hp_regen           INT         NOT NULL,
-  sp_regen           INT         NOT NULL,
-  attack_speed       INT         NOT NULL,
-  attack_speed_limit INT         NOT NULL,
+  max_hp             SMALLINT         NOT NULL,
+  max_sp             SMALLINT         NOT NULL,
+  hp_regen           TINYINT         NOT NULL,
+  sp_regen           TINYINT         NOT NULL,
+  attack_speed       FLOAT         NOT NULL,
+  attack_speed_limit FLOAT         NOT NULL,
   move_speed         INT         NOT NULL,
   sight_range        INT         NOT NULL,
+
+  growth_attack_power       INT         NOT NULL,
+  growth_defense            INT         NOT NULL,
+  growth_max_hp             INT         NOT NULL,
+  growth_max_sp             INT         NOT NULL,
+  growth_hp_regen           INT         NOT NULL,
+  growth_sp_regen           INT         NOT NULL,
+  PRIMARY KEY (character_id)
+);
+
+-- 수정중
+CREATE TABLE game_character_weapon
+(
+  character_id        INT         NOT NULL,
+  weapon_type         VARCHAR(26) NOT NULL,
+  weapon_attack_power INT         NOT NULL,
+  weapon_defense             INT         NOT NULL,
+  skill_amp           INT         NOT NULL,
+  max_hp              INT         NOT NULL,
+  max_sp              INT         NOT NULL,
+  hp_regen            INT         NOT NULL,
+  sp_regen            INT         NOT NULL,
+  attack_speed        INT         NOT NULL,
+  attack_speed_limit  INT         NOT NULL,
+  weapon_move_speed          INT         NOT NULL,
+  sight_range         INT         NOT NULL,
   PRIMARY KEY (character_id)
 );
 
@@ -98,7 +152,7 @@ CREATE TABLE match_user_credit_time
   minute      TINYINT  NOT NULL,
   used_credit SMALLINT NOT NULL,
   gain_credit SMALLINT NOT NULL,
-  PRIMARY KEY (match_id, user_id)
+  PRIMARY KEY (match_id, user_id, minute)
 );
 
 CREATE TABLE match_user_damage
@@ -124,16 +178,16 @@ CREATE TABLE match_user_equipment
 (
   match_id               INT       NOT NULL,
   user_id                INT       NOT NULL,
-  equipment_weapon       MEDIUMINT NOT NULL    ,
-  equipment_chest        MEDIUMINT NOT NULL,
-  equipment_head         MEDIUMINT NOT NULL,
-  equipment_arm          MEDIUMINT NOT NULL,
-  equipment_leg          MEDIUMINT NOT NULL,
-  first_equipment_weapon MEDIUMINT NOT NULL,
-  first_equipment_chest  MEDIUMINT NOT NULL,
-  first_equipment_head   MEDIUMINT NOT NULL,
-  first_equipment_arm    MEDIUMINT NOT NULL,
-  first_equipment_leg    MEDIUMINT NOT NULL,
+  equipment_weapon       MEDIUMINT NULL    ,
+  equipment_chest        MEDIUMINT NULL,
+  equipment_head         MEDIUMINT NULL,
+  equipment_arm          MEDIUMINT NULL,
+  equipment_leg          MEDIUMINT NULL,
+  first_equipment_weapon MEDIUMINT NULL,
+  first_equipment_chest  MEDIUMINT NULL,
+  first_equipment_head   MEDIUMINT NULL,
+  first_equipment_arm    MEDIUMINT NULL,
+  first_equipment_leg    MEDIUMINT NULL,
   PRIMARY KEY (match_id, user_id)
 );
 
@@ -207,11 +261,11 @@ CREATE TABLE match_user_stat
   sp                    SMALLINT NOT NULL,
   hp_regen              SMALLINT NOT NULL,
   sp_regen              SMALLINT NOT NULL,
-  depense               SMALLINT NOT NULL,
+  defense               SMALLINT NOT NULL,
   attack_power          SMALLINT NOT NULL,
   attack_speed          SMALLINT NOT NULL,
   skill_amp             SMALLINT NOT NULL,
-  cooldown_percent      FLOAT    NOT NULL,
+  cooldown_percent      TINYINT  NOT NULL,
   adaptive_force        SMALLINT NOT NULL,
   adaptive_force_attack SMALLINT NOT NULL,
   adaptive_force_amp    SMALLINT NOT NULL,
@@ -220,8 +274,8 @@ CREATE TABLE match_user_stat
   sight_range           FLOAT    NOT NULL,
   attack_range          FLOAT    NOT NULL,
   critical_percent      TINYINT  NOT NULL,
-  critical_damage       SMALLINT NOT NULL,
-  life_steal_percent    FLOAT    NOT NULL,
+  critical_damage       TINYINT  NOT NULL,
+  life_steal_percent    TINYINT  NOT NULL,
   normal_life_steel     SMALLINT NOT NULL,
   skill_life_steel      SMALLINT NOT NULL,
   PRIMARY KEY (match_id, user_id)
@@ -232,10 +286,10 @@ CREATE TABLE match_user_trait
   user_id          INT NOT NULL,
   match_id         INT NOT NULL,
   core_trait_id    INT NOT NULL,
-  first_trait_id1  INT NOT NULL,
-  first_trait_id2  INT NOT NULL,
-  second_trait_id1 INT NOT NULL,
-  second_trait_id2 INT NOT NULL,
+  first_trait_id_one  INT NOT NULL,
+  first_trait_id_two  INT NOT NULL,
+  second_trait_id_one INT NOT NULL,
+  second_trait_id_two INT NOT NULL,
   PRIMARY KEY (user_id, match_id)
 );
 
@@ -299,17 +353,11 @@ CREATE TABLE object
 CREATE TABLE trait_info
 (
   trait_id   INT      NOT NULL,
-  trait_name CHAR(50) NOT NULL,
+  trait_name VARCHAR(16) NOT NULL,
   PRIMARY KEY (trait_id)
 );
 
-CREATE TABLE user
-(
-  user_id       INT         NOT NULL,
-  nickname      VARCHAR(16) NOT NULL,
-  user_language VARCHAR(16) NOT NULL,
-  PRIMARY KEY (user_id)
-);
+
 
 CREATE TABLE user_match_kda_detail
 (
@@ -323,11 +371,6 @@ CREATE TABLE user_match_kda_detail
   death_phase_three TINYINT NOT NULL,
   PRIMARY KEY (match_id, user_id)
 );
-
-ALTER TABLE match_user_basic
-  ADD CONSTRAINT FK_user_TO_match_user_basic
-    FOREIGN KEY (user_id)
-    REFERENCES user (user_id);
 
 ALTER TABLE match_user_basic
   ADD CONSTRAINT FK_match_info_TO_match_user_basic
@@ -446,17 +489,32 @@ ADD CONSTRAINT fk_core_trait_id
     FOREIGN KEY (core_trait_id) REFERENCES trait_info(trait_id);
 
 ALTER TABLE match_user_trait
-ADD CONSTRAINT fk_first_trait_id1
-    FOREIGN KEY (first_trait_id1) REFERENCES trait_info(trait_id);
+ADD CONSTRAINT fk_first_trait_id_one
+    FOREIGN KEY (first_trait_id_one) REFERENCES trait_info(trait_id);
 
 ALTER TABLE match_user_trait
-ADD CONSTRAINT fk_first_trait_id2
-    FOREIGN KEY (first_trait_id2) REFERENCES trait_info(trait_id);
+ADD CONSTRAINT fk_first_trait_id_two
+    FOREIGN KEY (first_trait_id_two) REFERENCES trait_info(trait_id);
 
 ALTER TABLE match_user_trait
-ADD CONSTRAINT fk_second_trait_id1
-    FOREIGN KEY (second_trait_id1) REFERENCES trait_info(trait_id);
+ADD CONSTRAINT fk_second_trait_id_one
+    FOREIGN KEY (second_trait_id_one) REFERENCES trait_info(trait_id);
 
 ALTER TABLE match_user_trait
-ADD CONSTRAINT fk_second_trait_id2
-    FOREIGN KEY (second_trait_id2) REFERENCES trait_info(trait_id);
+ADD CONSTRAINT fk_second_trait_id_two
+    FOREIGN KEY (second_trait_id_two) REFERENCES trait_info(trait_id);
+
+/*
+CREATE TABLE user
+(
+  user_id       INT         NOT NULL,
+  nickname      VARCHAR(16) NOT NULL,
+  user_language VARCHAR(16) NOT NULL,
+  PRIMARY KEY (user_id)
+);
+
+ALTER TABLE match_user_basic
+  ADD CONSTRAINT FK_user_TO_match_user_basic
+    FOREIGN KEY (user_id)
+    REFERENCES user (user_id);
+*/
