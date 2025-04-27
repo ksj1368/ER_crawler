@@ -1,7 +1,13 @@
 import os
+import asyncio
+import aiohttp
 from dotenv import load_dotenv
 import requests
-
+from typing import List, Dict, Any, Tuple, Optional, Set
+from functools import lru_cache
+import logging
+from tqdm import tqdm
+import pymysql
 # .env 파일에서 환경 변수 로드
 load_dotenv()
 
@@ -13,8 +19,10 @@ HEADERS_WITH_KEY = {
     "accept": "application/json",
     "x-api-key": API_KEY
 }
-def get_character():
 
+# 정적 데이터 캐싱
+@lru_cache(maxsize=None)
+def get_character():
     character_url = f'https://open-api.bser.io/v2/data/Character'
     character_levelup_url = f'https://open-api.bser.io/v2/data/CharacterLevelUpStat'
     response_c = requests.get(character_url, headers=HEADERS_WITH_KEY)
@@ -26,8 +34,8 @@ def get_character():
         print(f"[Error] get_character - status_code: {response_cl.status_code}")
         return None
 
+@lru_cache(maxsize=None)
 def get_equipment():
-
     url_armor = f'https://open-api.bser.io/v2/data/ItemArmor'
     url_weapon = f'https://open-api.bser.io/v2/data/ItemWeapon'
     
@@ -40,8 +48,8 @@ def get_equipment():
         print(f"[Error] get_equipment weapon - status_code: {response_weapon.status_code}")
         return None
     
+@lru_cache(maxsize=None)
 def get_trait():
-
     url = f'https://open-api.bser.io/v2/data/Trait'
     
     response = requests.get(url, headers=HEADERS_WITH_KEY)
@@ -51,6 +59,8 @@ def get_trait():
     else:
         print(f"[Error] get_trait - status_code: {response.status_code}")
         return None
+
+@lru_cache(maxsize=None)
 def get_l10n():
     url = 'https://d1wkxvul68bth9.cloudfront.net/l10n/l10n-Korean-20250417055750.txt'
     response = requests.get(url, headers=HEADERS_WITH_KEY)
@@ -63,7 +73,6 @@ def get_l10n():
         print(f"[Error] get_trait - status_code: {response.status_code}")
         return None
 
-    
 def get_top_ranker(season: int, matching_mode: int) -> dict | None:
     """
     특정 시즌, 지역, 매칭 모드에서의 상위 랭커 정보를 반환합니다.
@@ -77,29 +86,85 @@ def get_top_ranker(season: int, matching_mode: int) -> dict | None:
         print(f"[Error] get_top_ranker - status_code: {response.status_code}")
         return None
 
-
-def get_match_id(match_ids: list, user_num: int, main_version: int) -> list:
-    """
-    사용자의 게임 기록 중, 특정 메이저 버전에 해당하고 랭크 모드(3)인 게임 ID를 수집합니다.
-    """
-    url = f"{BASE_URL}/user/games/{user_num}"
-    while url:
-        response = requests.get(url, headers=HEADERS_WITH_KEY)
-        if response.status_code == 200:
-            data = response.json()
-            for game in data.get("userGames", []):
-                if game["versionMajor"] == main_version:
-                    if game["matchingMode"] == 3 and game["gameId"] not in match_ids:
-                        match_ids.append(game["gameId"])
-                elif game["versionMajor"] < main_version:
-                    print(game["versionMajor"])
-                    return match_ids
-            if url and data.get('next'):
-                url = f"{BASE_URL}/user/games/{user_num}?next={data['next']}"
+async def fetch_user_games(session, url):
+    """비동기적으로 사용자 게임 정보를 가져옵니다."""
+    async with session.get(url) as response:
+        if response.status == 200:
+            return await response.json()
         else:
-            print(f"[Error] get_match_id - status_code: {response.status_code}")
-    return match_ids
+            print(f"[Error] fetch_user_games - status_code: {response.status}")
+            """if response.status == 429:
+                await asyncio.sleep(1.5)"""
+            return None
 
+async def get_match_ids_async(user_nums: List[int], main_version: int) -> List[int]:
+    """
+    비동기적으로 여러 사용자의 게임 ID를 수집합니다.
+    각 사용자별로 수집 게임 수를 제한할 수 있습니다.
+    """
+    match_ids_set = set()
+    
+    async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
+        tasks = []
+        for user_num in tqdm(user_nums):
+            url = f"{BASE_URL}/user/games/{user_num}"
+            tasks.append(fetch_user_games(session, url))
+        
+        responses = await asyncio.gather(*tasks)
+        for user_num, data in zip(user_nums, responses):
+            while data and "userGames" in data:
+                stop_crawling = False  # 중단 여부 플래그
+                for game in data["userGames"]:
+                    if game["versionMajor"] > main_version:
+                        continue  # 그냥 무시하고 다음 게임
+                    elif game["versionMajor"] == main_version:
+                        if game["matchingMode"] == 3:
+                            match_ids_set.add(game["gameId"])
+                    else:  # game["versionMajor"] < main_version
+                        stop_crawling = True
+                        break  # 버전이 낮으면 바로 탐색 종료
+
+                if stop_crawling or not data.get('next'):
+                    break  # 크롤링 중단 또는 next 없으면 종료
+
+                # 다음 페이지로 이동
+                url = f"{BASE_URL}/user/games/{user_num}?next={data['next']}"
+                data = await fetch_user_games(session, url)
+
+    return list(match_ids_set)
+
+async def fetch_match_info(session, match_id):
+    """비동기적으로 단일 게임 정보를 가져옵니다."""
+    url = f"{BASE_URL}/games/{match_id}"
+    async with session.get(url) as response:
+        if response.status == 200:
+            return match_id, await response.json()
+        else:
+            print(f"[Error] fetch_match_info - match_id: {match_id}, status_code: {response.status}")
+            return match_id, None
+
+async def get_match_infos_async(match_ids: List[int], batch_size: int = 10) -> Dict[int, Any]:
+    """
+    비동기적으로 여러 게임의 정보를 배치 단위로 수집합니다.
+    """
+    result = {}
+    
+    async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
+        # 배치 단위로 처리
+        for i in range(0, len(match_ids), batch_size):
+            batch = match_ids[i:i+batch_size]
+            tasks = [fetch_match_info(session, match_id) for match_id in batch]
+            batch_results = await asyncio.gather(*tasks)
+            
+            for match_id, data in batch_results:
+                if data:
+                    result[match_id] = data
+            
+            # 배치 간 짧은 대기 시간 추가하여 API 서버 부하 방지
+            if i + batch_size < len(match_ids):
+                await asyncio.sleep(0.5)
+    
+    return result
 
 def match_info(match_id: int) -> dict | None:
     """
