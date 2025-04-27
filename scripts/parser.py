@@ -1,16 +1,16 @@
-import json
-from datetime import datetime
-from typing import Dict, List, Any, Tuple, Optional
-
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
 
 def top_ranker_id(data: dict) -> dict:
     """
-    아시아 지역 1000위 이상 유저의 User Id를 파싱하는 함수
+    parse the User IDs ranked 1000 in the Asia region.
     """
-    top_1000_users = []
+    top_1000_user_ids = []
+    top_1000_user_nicknames = []
     for i in range(len(data['topRanks'])):
-        top_1000_users.append(data['topRanks'][i]['userNum'])
-    return top_1000_users
+        top_1000_user_ids.append(data['topRanks'][i]['userNum'])
+        top_1000_user_nicknames.append(data['topRanks'][i]['nickname'])
+    return top_1000_user_ids, top_1000_user_nicknames
 
 def parse_match_info(data: dict) -> dict:
     """
@@ -22,9 +22,14 @@ def parse_match_info(data: dict) -> dict:
     
     # Using first user data to get match info
     user_json = data["userGames"][0]
+    start_dtm = datetime.strptime(user_json["startDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
+    play_time = next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 1),
+                     next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 2))
+)
+    match_expire_dtm = start_dtm + timedelta(seconds=play_time)
     match_info = {
         "match_id": user_json["gameId"],
-        "start_dtm": user_json["startDtm"],
+        "start_dtm": start_dtm,
         "match_mode": user_json["matchingTeamMode"],
         "season_id": user_json["seasonId"],
         "version_major": user_json["versionMajor"],
@@ -34,7 +39,7 @@ def parse_match_info(data: dict) -> dict:
         "match_size": len(data["userGames"]),
         "match_avg_mmr": user_json["mmrAvg"],
         # Find match end time from the winner (rank 1)
-        "match_end": next((u["expireDtm"] for u in data["userGames"] if u["gameRank"] == 1), None)
+        "match_expire_dtm": match_expire_dtm
     }
     
     return match_info
@@ -55,11 +60,6 @@ def parse_match_team_info(data: dict) -> List[dict]:
             continue
         
         match_id = user_json["gameId"]
-        start_dtm = user_json["startDtm"]
-        start_dtm = datetime.strptime(start_dtm, "%Y-%m-%dT%H:%M:%S.%f%z")
-        
-        expire_dtm = user_json["expireDtm"]
-        expire_dtm = datetime.strptime(expire_dtm, "%Y-%m-%dT%H:%M:%S.%f%z")
         
         is_older_version = user_json["versionMajor"] <= 44
         
@@ -68,9 +68,7 @@ def parse_match_team_info(data: dict) -> List[dict]:
             "team_id": team_id,
             "team_ranking": user_json["gameRank"],
             "escape_state": user_json["escapeState"],
-            "expire_dtm": expire_dtm, # 2025-04-21T03:45:34.034+0900
             "player_down": user_json["teamDown"],
-            "total_play_time": expire_dtm - start_dtm,
             "team_elimination_count": user_json["teamElimination"]
         }
         
@@ -133,14 +131,13 @@ def parse_match_user_basic(data: dict) -> List[dict]:
             "tactical_skill_count": user_json["tacticalSkillUseCount"],
             "credit_revival_count": user_json["creditRevivalCount"],
             "credit_revival_other_count": user_json["creditRevivedOthersCount"],
-            "user_end_time": datetime.strptime(user_json["expireDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
         }
         
         user_basic_list.append(user_basic)
     
     return user_basic_list
 
-def parse_match_user_equipment(data: dict) -> List[dict]:
+'''def parse_match_user_equipment(data: dict) -> List[dict]:
     """
     Parse user equipment information from the JSON data.
     Returns a list of dictionaries with match_user_equipment table data.
@@ -148,19 +145,61 @@ def parse_match_user_equipment(data: dict) -> List[dict]:
     user_equipment_list = []
     
     for user_json in data.get("userGames", []):
+        equipment_data = user_json.get("equipment", {})
+        equip_first_log = user_json.get("equipFirstItemForLog", {})
+
         equipment = {
             "match_id": user_json["gameId"],
             "user_id": user_json["userNum"],
-            "equipment_weapon": user_json["equipment"].get("0"),
-            "equipment_chest": user_json["equipment"].get("1"),
-            "equipment_head": user_json["equipment"].get("2"),
-            "equipment_arm": user_json["equipment"].get("3"),
-            "equipment_leg": user_json["equipment"].get("4"),
-            "first_equipment_weapon": user_json["equipFirstItemForLog"]["0"][-1],
-            "first_equipment_chest": user_json["equipFirstItemForLog"]["1"][-1],
-            "first_equipment_head": user_json["equipFirstItemForLog"]["2"][-1],
-            "first_equipment_arm": user_json["equipFirstItemForLog"]["3"][-1],
-            "first_equipment_leg": user_json["equipFirstItemForLog"]["4"][-1]
+            "equipment_weapon": equipment_data.get("0"),
+            "equipment_chest": equipment_data.get("1"),
+            "equipment_head": equipment_data.get("2"),
+            "equipment_arm": equipment_data.get("3"),
+            "equipment_leg": equipment_data.get("4"),
+            "first_equipment_weapon": equip_first_log.get("0", [None])[-1],
+            "first_equipment_chest": equip_first_log.get("1", [None])[-1],
+            "first_equipment_head": equip_first_log.get("2", [None])[-1],
+            "first_equipment_arm": equip_first_log.get("3", [None])[-1],
+            "first_equipment_leg": equip_first_log.get("4", [None])[-1]
+        }
+        
+        user_equipment_list.append(equipment)
+    
+    return user_equipment_list'''
+    
+def parse_match_user_equipment(data: dict) -> List[dict]:
+    """
+    Parse user equipment information from the JSON data.
+    Returns a list of dictionaries with match_user_equipment table data.
+    """
+    def none_if_zero(val):
+        # 리스트일 경우 마지막 값을 사용
+        if isinstance(val, list):
+            if not val:
+                return None
+            val = val[-1]
+        # 0 또는 "0"이면 None, 아니면 원래 값
+        return None if val == 0 or val == "0" else val
+
+    user_equipment_list = []
+    
+    for user_json in data.get("userGames", []):
+        equipment_data = user_json.get("equipment", {})
+        equip_first_log = user_json.get("equipFirstItemForLog", {})
+
+        equipment = {
+            "match_id": user_json["gameId"],
+            "user_id": user_json["userNum"],
+            "equipment_weapon": none_if_zero(equipment_data.get("0")),
+            "equipment_chest": none_if_zero(equipment_data.get("1")),
+            "equipment_head": none_if_zero(equipment_data.get("2")),
+            "equipment_arm": none_if_zero(equipment_data.get("3")),
+            "equipment_leg": none_if_zero(equipment_data.get("4")),
+            "first_equipment_weapon": none_if_zero(equip_first_log.get("0", [None])),
+            "first_equipment_chest": none_if_zero(equip_first_log.get("1", [None])),
+            "first_equipment_head": none_if_zero(equip_first_log.get("2", [None])),
+            "first_equipment_arm": none_if_zero(equip_first_log.get("3", [None])),
+            "first_equipment_leg": none_if_zero(equip_first_log.get("4", [None]))
         }
         
         user_equipment_list.append(equipment)
@@ -182,11 +221,11 @@ def parse_match_user_stat(data: dict) -> List[dict]:
             "sp": user_json["maxSp"],
             "hp_regen": user_json["hpRegen"],
             "sp_regen": user_json["spRegen"],
-            "depense": user_json["defense"],
+            "defense": user_json["defense"],
             "attack_power": user_json["attackPower"],
             "attack_speed": user_json["attackSpeed"],
             "skill_amp": user_json["skillAmp"],
-            "cooldown_percent": float(user_json["coolDownReduction"]),
+            "cooldown_percent": int(user_json["coolDownReduction"]),
             "adaptive_force": user_json["adaptiveForce"],
             "adaptive_force_attack": user_json["adaptiveForceAttack"],
             "adaptive_force_amp": user_json["adaptiveForceAmplify"],
@@ -194,10 +233,10 @@ def parse_match_user_stat(data: dict) -> List[dict]:
             "ooc_move_speed": float(user_json["outOfCombatMoveSpeed"]),
             "sight_range": float(user_json["sightRange"]),
             "attack_range": float(user_json["attackRange"]),
-            "critical_percent": user_json["criticalStrikeChance"],
-            "critical_damage": user_json["criticalStrikeDamage"],
-            "life_steal_percent": float(user_json["lifeSteal"]),
-            "normal_life_steel": int(user_json["normalLifeSteal"] * 100),
+            "critical_percent": int(user_json["criticalStrikeChance"]),
+            "critical_damage": int(user_json.get("criticalStrikeDamage", 0)),
+            "life_steal_percent": int(100*user_json["lifeSteal"]),
+            "normal_life_steel": int(100*user_json["normalLifeSteal"]),
             "skill_life_steel": user_json["skillLifeSteal"]
         }
         
@@ -246,10 +285,10 @@ def parse_match_user_trait(data: dict) -> List[dict]:
             "user_id": user_json["userNum"],
             "match_id": user_json["gameId"],
             "core_trait_id": user_json["traitFirstCore"],
-            "first_trait_id1": user_json["traitFirstSub"][0],
-            "first_trait_id2": user_json["traitFirstSub"][1],
-            "second_trait_id1": user_json["traitSecondSub"][0],
-            "second_trait_id2": user_json["traitSecondSub"][1]
+            "first_trait_id_one": user_json["traitFirstSub"][0],
+            "first_trait_id_two": user_json["traitFirstSub"][1],
+            "second_trait_id_one": user_json["traitSecondSub"][0],
+            "second_trait_id_two": user_json["traitSecondSub"][1]
         }
         
         user_trait_list.append(user_trait)
@@ -504,3 +543,118 @@ def parse_match_data(data: dict) -> Dict[str, Any]:
     except Exception as e:
         print(f"Error parsing match data: {e}")
         raise
+    
+def parse_game_character(character_data: dict, levelup_data: dict) -> List[dict]:
+    game_character_list = []
+    
+    # levelup_data를 character_id 기준으로 빠르게 찾을 수 있도록 dict로 변환
+    levelup_dict = {item['code']: item for item in levelup_data.get("data", [])}
+    
+    for character_json in character_data.get("data", []):
+        character_id = character_json['code']
+        levelup_stats = levelup_dict.get(character_id, {})
+
+        game_character = {
+            "character_id": character_id,         
+            "character_name": character_json['name'], 
+            "attack_power": character_json['attackPower'],         
+            "defense": character_json['defense'],              
+            "skill_amp": character_json['skillAmp'],            
+            "max_hp": character_json['maxHp'],               
+            "max_sp": character_json['maxSp'],               
+            "hp_regen": character_json['hpRegen'],             
+            "sp_regen": character_json['spRegen'],             
+            "attack_speed": character_json['attackSpeed'],         
+            "attack_speed_limit": character_json['attackSpeedLimit'],   
+            "move_speed": character_json['moveSpeed'],           
+            "sight_range": character_json['sightRange'],          
+
+            # 레벨업 능력치 (없는 경우는 0으로 대체)
+            "growth_attack_power": levelup_stats.get('attackPower', 0),
+            "growth_defense": levelup_stats.get('defense', 0),
+            "growth_max_hp": levelup_stats.get('maxHp', 0),
+            "growth_max_sp": levelup_stats.get('maxSp', 0),
+            "growth_hp_regen": levelup_stats.get('hpRegen', 0),
+            "growth_sp_regen": levelup_stats.get('spRegen', 0),
+        }
+        game_character_list.append(game_character)
+
+    return game_character_list
+
+def parse_equipment(armor_data: dict, weapon_data: dict) -> List[dict]:
+    """
+    Parse equipment and weapon data from the JSON structure.
+    Returns a unified list of dictionaries for match_equipment table.
+    """
+    equipment_list = []
+    item_grade = ["Uncommon", "Common", "Rare", "Epic", "Legend", "Mythic"]
+
+    def parse_individual_equipment(equipment_json: Dict) -> Dict:
+        return {
+            'equipment_id': equipment_json['code'],
+            "equipment_name": equipment_json['name'],
+            "equipment_main_type": equipment_json['itemType'],
+            "equipment_sub_type": equipment_json.get('armorType') or equipment_json.get('weaponType', None),
+            "equipment_grade": item_grade.index(equipment_json['itemGrade']),
+            "attack_power": equipment_json.get('attackPower', 0),
+            'attack_power_bylv': equipment_json.get('attackPowerByLv', 0),
+            "defense": equipment_json.get('defense', 0),
+            "defense_bylv": equipment_json.get('defenseByLv', 0),
+            "skill_amp": equipment_json.get('skillAmp', 0),
+            "skill_amp_bylv": equipment_json.get('skillAmpByLevel', 0),
+            "skill_amp_ratio": int(100 * equipment_json.get('skillAmpRatio', 0)),
+            "adaptive_force": equipment_json.get('adaptiveForce', 0),
+            "max_hp": equipment_json.get('maxHp', 0),
+            "max_hp_bylv": equipment_json.get('maxHpByLv', 0),
+            "max_sp": equipment_json.get('maxSp', 0),
+            "hp_regen_percent": int(100 * equipment_json.get('hpRegenRatio', 0)),
+            "sp_regen_percent": int(100 * equipment_json.get('spRegenRatio', 0)),
+            "attack_speed_percent": int(100 * equipment_json.get('attackSpeedRatio', 0)),
+            "critical_percent": int(100 * equipment_json.get('criticalStrikeChance', 0)),
+            "critical_damage_percent": int(100 * equipment_json.get('criticalStrikeDamage', 0)),
+            "cooldown_percent": int(100 * equipment_json.get('cooldownReduction', 0)),
+            "lifeSteal_percent": int(100 * equipment_json.get('lifeSteal', 0)),
+            "normal_life_steel": int(100 * equipment_json.get('normalLifeSteal', 0)),
+            "move_speed": equipment_json.get('moveSpeed', 0),
+            "move_speed_percent": int(100 * equipment_json.get('moveSpeedRatio', 0)),
+            "sight_range": equipment_json.get('sightRange', 0),
+            "penetration_defense": equipment_json.get('penetrationDefense', 0),
+            "slow_resist_percent": int(100 * equipment_json.get('slowResistRatio', 0)),
+            "cooldown_limit_percent": int(100 * equipment_json.get('uniqueCooldownLimit', 0)),
+            "tenacity_percent": int(100 * equipment_json.get('uniqueTenacity', 0)),
+            "unique_skill_amp_percent": int(100 * equipment_json.get('uniqueSkillAmpRatio', 0))
+        }
+
+    # Parse armor data
+    for equipment_json in armor_data.get("data", []):
+        equipment_list.append(parse_individual_equipment(equipment_json))
+
+    # Parse weapon data
+    for equipment_json in weapon_data.get("data", []):
+        equipment_list.append(parse_individual_equipment(equipment_json))
+
+    return equipment_list
+
+def parse_txt_to_dict(txt: str) -> Dict[str, str]:
+    result = {}
+    for line in txt.strip().splitlines():
+        if "┃" in line:
+            key, value = line.split("┃", 1)
+            result[key.strip()] = value.strip()
+    return result
+
+def parse_trait_info(data: dict, txt_mapping: Dict[str, str]) -> List[dict]:
+    trait_list = []
+    
+    for trait_json in data.get("data", []):
+        if trait_json['traitGroup'] != 'Cobalt' and trait_json['traitGroup'] != "None":
+            trait_code = trait_json['code']
+            txt_key = f"Trait/Name/{trait_code}"
+            trait_name = txt_mapping[txt_key]  # fallback to API name if not found
+            trait = {
+                'trait_id': trait_code,
+                "trait_name": trait_name,
+            }      
+            trait_list.append(trait)
+
+    return trait_list
