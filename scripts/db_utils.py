@@ -39,12 +39,12 @@ def get_db_connection():
     
     # 커넥션을 얻기 전에 대기 시간 추가 (필요시)
     # 재시도 로직 추가
-    for attempt in range(3):  # 최대 3번 재시도
+    for attempt in range(3):
         try:
             return get_db_connection._pool.connection()
         except Exception as e:
             if attempt < 2:  # 마지막 시도가 아니면 대기 후 재시도
-                sleep(0.5 * (attempt + 1))
+                sleep(1.5)
             else:
                 raise
 
