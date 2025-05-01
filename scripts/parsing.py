@@ -23,10 +23,12 @@ def parse_match_info(data: dict) -> dict:
     # Using first user data to get match info
     user_json = data["userGames"][0]
     start_dtm = datetime.strptime(user_json["startDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
-    play_time = next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 1),
+    play_time = min(data["userGames"], key=lambda u: u["gameRank"])["playTime"]
+    
+    """play_time = next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 1),
                      next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 2),
-                        next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 3)
-)
+                        next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 3))"""
+                        
     match_expire_dtm = start_dtm + timedelta(seconds=play_time)
     match_info = {
         "match_id": user_json["gameId"],
@@ -39,7 +41,6 @@ def parse_match_info(data: dict) -> dict:
         "weather_sub": user_json["subWeather"],
         "match_size": len(data["userGames"]),
         "match_avg_mmr": user_json["mmrAvg"],
-        # Find match end time from the winner (rank 1)
         "match_expire_dtm": match_expire_dtm
     }
     
