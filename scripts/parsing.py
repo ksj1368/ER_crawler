@@ -24,7 +24,8 @@ def parse_match_info(data: dict) -> dict:
     user_json = data["userGames"][0]
     start_dtm = datetime.strptime(user_json["startDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
     play_time = next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 1),
-                     next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 2))
+                     next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 2),
+                        next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 3)
 )
     match_expire_dtm = start_dtm + timedelta(seconds=play_time)
     match_info = {
@@ -136,36 +137,6 @@ def parse_match_user_basic(data: dict) -> List[dict]:
         user_basic_list.append(user_basic)
     
     return user_basic_list
-
-'''def parse_match_user_equipment(data: dict) -> List[dict]:
-    """
-    Parse user equipment information from the JSON data.
-    Returns a list of dictionaries with match_user_equipment table data.
-    """
-    user_equipment_list = []
-    
-    for user_json in data.get("userGames", []):
-        equipment_data = user_json.get("equipment", {})
-        equip_first_log = user_json.get("equipFirstItemForLog", {})
-
-        equipment = {
-            "match_id": user_json["gameId"],
-            "user_id": user_json["userNum"],
-            "equipment_weapon": equipment_data.get("0"),
-            "equipment_chest": equipment_data.get("1"),
-            "equipment_head": equipment_data.get("2"),
-            "equipment_arm": equipment_data.get("3"),
-            "equipment_leg": equipment_data.get("4"),
-            "first_equipment_weapon": equip_first_log.get("0", [None])[-1],
-            "first_equipment_chest": equip_first_log.get("1", [None])[-1],
-            "first_equipment_head": equip_first_log.get("2", [None])[-1],
-            "first_equipment_arm": equip_first_log.get("3", [None])[-1],
-            "first_equipment_leg": equip_first_log.get("4", [None])[-1]
-        }
-        
-        user_equipment_list.append(equipment)
-    
-    return user_equipment_list'''
     
 def parse_match_user_equipment(data: dict) -> List[dict]:
     """
@@ -410,8 +381,8 @@ def parse_match_user_gain_credit(data: dict) -> List[dict]:
             "match_id": user_json["gameId"],
             "user_id": user_json["userNum"],
             "total_gain_cr": user_json["totalGainVFCredit"],
-            "start_cr": credit_source["PreliminaryPhase"],
-            "time_elapse_cr": credit_source["TimeElapsedCompensationByMiliSecond"],
+            "start_cr": credit_source.get("PreliminaryPhase", 0),
+            "time_elapse_cr": credit_source.get("TimeElapsedCompensationByMiliSecond", 0),
             "time_elapse_bonus_cr": int(credit_source.get("TimeElapsedCreditBonusByMiliSecond",0)),
             "wild_dog_cr": credit_source.get("KillWildDog", 0),
             "bat_cr": credit_source.get("KillBat", 0),
