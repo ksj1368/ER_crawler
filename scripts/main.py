@@ -16,23 +16,25 @@ from dotenv import load_dotenv
 from datetime import datetime
 from typing import Optional
 
-
-
 load_dotenv()
 # 데이터베이스 연결 풀 크기 설정
 DB_POOL_SIZE = min(8, cpu_count())
-
+    
 def save_parsed_data_to_db(parsed_data, conn):
     """DB에 파싱된 데이터를 저장합니다."""
     logger = logging.getLogger(__name__)
-    first_equipment_weapon = parsed_data.get("first_equipment_weapon")
     try:
-        tables = [
+        with conn.cursor() as cursor:
+            sql = f"SHOW TABLES FROM er_dataset;"
+            cursor.execute(sql)
+            tables = [t_name[0] for t_name in cursor.fetchall()]
+            
+        '''tables = [
             "match_info", "match_team_info", "match_user_basic", "match_user_equipment", "match_user_stat",
             "match_user_damage", "match_user_trait", "match_user_mmr", "user_match_kda_detail",
             "match_user_sight", "object", "match_user_gain_credit", "match_user_use_credit", 
             "match_user_credit_time"
-        ]
+        ]'''
         for table in tables:
             if table in parsed_data and parsed_data[table]:
                 if isinstance(parsed_data[table], dict) and parsed_data[table]:
@@ -41,7 +43,6 @@ def save_parsed_data_to_db(parsed_data, conn):
                     insert_list(conn, table, parsed_data[table])        
     except Exception as e:
         logger.error(f"Error saving data to DB: {e}")
-        print(f'first_equipment_weapon: {first_equipment_weapon}')
         raise
 
 def fetch_match_data_with_retry(match_id: int, max_retries: int = 1) -> Optional[dict]:
@@ -103,7 +104,7 @@ def process_match_id(match_id, match_data):
         except Exception as e:
             logger.error(f"[DB ERROR] match_id {match_id}: {e}")
             first_equipment_weapon = parsed_data.get("first_equipment_weapon")
-            print(f'first_equipment_weapon, {first_equipment_weapon}')
+            print(f"first_equipment_weapon, {first_equipment_weapon}")
             conn.close()
             return False
 
@@ -148,8 +149,8 @@ def collect_data(users, main_version=44, batch_size=20):
     conn = get_db_connection()
     
     # DB에 이미 있는 match_id 가져오기(중복 제거용)
-    exist_match_ids = get_column_as_dict(conn, "match_info", ['match_id', 'version_major'])
-    exist_match_ids = exist_match_ids['match_id']
+    exist_match_ids = get_column_as_dict(conn, "match_info", ["match_id", "version_major"])
+    exist_match_ids = exist_match_ids["match_id"]
     
     try:
         # 정적 데이터 가져오기
@@ -241,12 +242,13 @@ def collect_data(users, main_version=44, batch_size=20):
     return success_count, len(match_ids)
 
 if __name__ == "__main__":
-    ### logging
+    # logging
     LOG_DIR = os.getenv("log_path")
     logger = setup_logger(LOG_DIR)
     start_time = time()
-    start_dt_str = datetime.fromtimestamp(start_time).strftime('%Y-%m-%d_%H-%M-%S')
+    start_dt_str = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d_%H-%M-%S")
     
+    # users = get_top_ranker(season=31, matching_mode=3)
     users = get_top_ranker(season=31, matching_mode=3)
     users, nicknames = top_ranker_id(users)
     user_chunks = split_into_chunks(users, 100) # 100개씩 분할
@@ -259,12 +261,14 @@ if __name__ == "__main__":
         logger.info(f"Processing user batch {idx+1}/{len(user_chunks)} ({len(user_chunk)} users)")
         success_count, total_count = collect_data(
             users=user_chunk,
-            main_version=44,
-            batch_size=50
+            main_version=45,
+            # main_version=36,
+            batch_size=100
         )
         logger.info(f"Batch {idx+1} Summary: {success_count}/{total_count} matches processed successfully")
         sum_success_count += success_count
         sum_total_count += total_count
+        
     # 처리 결과 요약
     elapsed_time = time() - start_time
     logger.info(f"Total Data collection completed in {elapsed_time:.2f} seconds")
