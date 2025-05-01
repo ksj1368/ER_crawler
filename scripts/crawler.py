@@ -100,17 +100,17 @@ def get_top_ranker(season: int, matching_mode: int) -> dict | None:
         print(f"[Error] get_top_ranker - status_code: {response.status_code}")
         return None
 
-async def fetch_user_games(session, user_num: int) -> dict:
+async def fetch_user_games(session, url: str) -> dict:
     """유저의 match 정보를 가져오는 함수
 
     Args:
         session (_type_): _description_
-        user_num (_type_): _description_
+        url (str): _description_
 
     Returns:
-        
+        dict: _description_
     """
-    url = f"{BASE_URL}/v1/user/games/{user_num}"
+    # url = f"{BASE_URL}/v1/user/games/{user_num}"
     async with session.get(url) as response:
         if response.status == 200:
             return await response.json()
@@ -130,7 +130,8 @@ async def get_match_ids_async(user_nums: List[int], main_version: int) -> List[i
     async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
         tasks = []
         for user_num in tqdm(user_nums):
-            tasks.append(fetch_user_games(session, user_num))
+            url = f"{BASE_URL}/v1/user/games/{user_num}"
+            tasks.append(fetch_user_games(session, url))
         
         responses = await asyncio.gather(*tasks)
         for user_num, data in zip(user_nums, responses):
