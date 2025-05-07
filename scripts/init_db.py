@@ -3,9 +3,8 @@ import pymysql
 import os
 
 def check_db_folder():
-    '''
-    Check the folder to store the data exists.
-    '''
+    """데이터베이스 및 데이터 저장에 필요한 폴더가 존재하는지 확인하고 없으면 생성하는 함수
+    """
     load_dotenv()
     db_folder = os.getenv("db_root")
     data_raw_folder = os.getenv("data_raw")
@@ -17,9 +16,8 @@ def check_db_folder():
             os.makedirs(folder)   
                  
 def init_db():
-    '''
-    
-    '''  
+    """DB 스키마 파일을 읽어 데이터베이스를 초기화하고 필요한 테이블을 생성하는 함수
+    """
     load_dotenv()
     schema_path = os.getenv("schema_path")
     

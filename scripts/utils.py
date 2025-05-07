@@ -6,10 +6,13 @@ from dotenv import load_dotenv
 
 
 def setup_logger(LOG_DIR: str):
-    """_summary_
+    """지정한 디렉토리에 로그 파일을 생성하고 파일 및 콘솔 로그를 동시에 출력하는 로거를 선언하는 함수
+
+    Args:
+        LOG_DIR (str): 로그 파일이 저장될 디렉토리 경로
 
     Returns:
-        _type_: _description_
+        logging.Logger: 설정된 로거 객체
     """
     load_dotenv()
     start_time = time()
@@ -29,5 +32,6 @@ def setup_logger(LOG_DIR: str):
     return logger
 
 def split_into_chunks(lst, chunk_size):
-    """리스트를 chunk_size 크기로 분할"""
+    """리스트를 chunk_size 크기로 분할
+    """
     return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
