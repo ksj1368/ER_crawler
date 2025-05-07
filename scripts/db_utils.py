@@ -17,10 +17,10 @@ DB_NAME = os.getenv("DB_NAME")
 def create_pool():
     return PooledDB(
         creator=pymysql,
-        maxconnections=16,  # 32에서 감소
-        mincached=4,        # 16에서 감소
-        maxcached=16,       # 32에서 감소
-        maxshared=8,        # 16에서 감소
+        maxconnections=24,  
+        mincached=8,        
+        maxcached=32,       
+        maxshared=8,        
         blocking=True,
         host=DB_HOST,
         port=DB_PORT,
@@ -33,7 +33,11 @@ def create_pool():
     )
 
 def get_db_connection():
-    """프로세스마다 독립적인 풀에서 커넥션을 가져옵니다."""
+    """프로세스마다 독립적인 풀에서 커넥션을 가져옴
+
+    Returns:
+        get_db_connection._pool.connection(): 데이터베이스 커넥션 객체
+    """
     if not hasattr(get_db_connection, "_pool"):
         get_db_connection._pool = create_pool()
     
@@ -49,13 +53,27 @@ def get_db_connection():
                 raise
 
 def match_exists(conn, match_id):
-    """주어진 match_id가 이미 데이터베이스에 존재하는지 확인"""
+    """주어진 match_id가 이미 데이터베이스에 존재하는지 확인
+
+    Args:
+        conn (_type_): _description_
+        match_id (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     with conn.cursor() as cursor:
         cursor.executemany("SELECT 1 FROM match_info WHERE match_id = %s LIMIT 1;", (match_id,))
         return cursor.fetchone() is not None
         
 def insert_dict(conn, table, data):
-    """단일 딕셔너리를 테이블에 INSERT"""
+    """단일 딕셔너리를 테이블에 삽입
+
+    Args:
+        conn (Any): 데이터베이스 연결 객체
+        table (str): 데이터를 삽입할 테이블 이름
+        data (dict): 삽입할 데이터 딕셔너리
+    """
     if not data:
         return
     with conn.cursor() as cursor:
@@ -65,12 +83,21 @@ def insert_dict(conn, table, data):
         # executemany의 두 번째 인자는 리스트 of 튜플이어야 함
         cursor.executemany(sql, [tuple(data.values())])
 
-def insert_list(conn, table, data_list):
-    """여러 딕셔너리를 테이블에 배치로 INSERT (executemany로 속도 개선)"""
+def insert_list(conn, table_name: str, data_list: dict):
+    """여러 개의 딕셔너리 데이터를 지정한 테이블에 일괄 삽입
+
+    Args:
+        conn (Any): 데이터베이스 연결 객체
+        table_name (str): 데이터를 삽입할 테이블 이름
+        data_list: 삽입할 데이터 딕셔너리의 리스트
+
+    Raises:
+        ValueError: 데이터의 컬럼 개수와 값 개수가 일치하지 않을 때 발생
+    """
     keys = list(data_list[0].keys())
     keys_str = ', '.join(keys)
     values_placeholder = ', '.join(['%s'] * len(keys))
-    sql = f"INSERT INTO {table} ({keys_str}) VALUES ({values_placeholder})"
+    sql = f"INSERT INTO {table_name} ({keys_str}) VALUES ({values_placeholder})"
     values = [tuple(data.get(key) for key in keys) for data in data_list]
     # 각 튜플의 길이가 %s 개수와 일치하는지 체크
     for v in values:
@@ -80,7 +107,15 @@ def insert_list(conn, table, data_list):
         cursor.executemany(sql, values)
 
 def bulk_check_match_exists(conn, match_ids):
-    """여러 match_id가 이미 데이터베이스에 존재하는지 일괄 확인"""
+    """여러 match_id가 이미 데이터베이스에 존재하는지 일괄 확인
+
+    Args:
+        conn (Any): 데이터베이스 연결 객체
+        match_ids (List[Any]): 존재 여부를 확인할 match_id 리스트
+
+    Returns:
+        set: 데이터베이스에 이미 존재하는 match_id의 집합
+    """
     if not match_ids:
         return set()
     
@@ -92,17 +127,23 @@ def bulk_check_match_exists(conn, match_ids):
         # 이미 존재하는 match_id 반환
         return {row[0] for row in cursor.fetchall()}
     
-def get_column_as_dict(connection, table_name: str, col: List[str]) -> dict:
-    '''
-    테이블의 특정 칼럼들에 해당하는 값을 컬럼별 리스트로 묶어 딕셔너리로 반환
-    '''
-    with connection.cursor() as cursor:
+def get_column_as_dict(conn, table_name: str, col: List[str]) -> dict:
+    """테이블의 특정 칼럼들에 해당하는 값을 컬럼별 리스트로 묶어 딕셔너리로 반환
+
+    Args:
+        conn (_type_): 데이터베이스 연결 객체
+        table_name (str): 조회할 테이블 이름
+        col (List[str]): 조회할 컬럼명 리스트
+
+    Returns:
+        dict: 각 컬럼명을 key로 하고, 해당 col의 리스트를 가지는 딕셔너리
+    """
+    with conn.cursor() as cursor:
         col_str = ', '.join(f"`{c}`" for c in col)  # 컬럼 리스트를 문자열로 변환
         sql = f"SELECT {col_str} FROM `{table_name}`"
         cursor.execute(sql)
         rows = cursor.fetchall()
 
-        # {컬럼명: [값1, 값2, ...]} 구조로 만들기
         result = {c: [] for c in col}
         for row in rows:
             for idx, c in enumerate(col):
