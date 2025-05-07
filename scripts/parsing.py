@@ -2,8 +2,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
 def top_ranker_id(data: dict) -> dict:
-    """
-    parse the User IDs ranked 1000 in the Asia region.
+    """topRanks 데이터에서 상위 랭커의 userNum과 nickname 리스트를 추출합
+
+    Args:
+        data (dict): 'topRanks' 키를 포함한 랭킹 데이터 딕셔너리
+
+    Returns:
+        dict: 상위 유저들의 userNum 리스트와 nickname 리스트
     """
     top_1000_user_ids = []
     top_1000_user_nicknames = []
@@ -13,9 +18,16 @@ def top_ranker_id(data: dict) -> dict:
     return top_1000_user_ids, top_1000_user_nicknames
 
 def parse_match_info(data: dict) -> dict:
-    """
-    Parse basic match information from the JSON data.
-    Returns a dictionary with match_info table data.
+    """매치 데이터에서 주요 정보를 파싱하여 match_info 딕셔너리로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Raises:
+        ValueError: 'userGames' 데이터가 없거나 비어 있을 때 발생
+
+    Returns:
+        dict: 매치 정보가 담긴 딕셔너리 (match_id, start_dtm, match_mode 등 포함)
     """
     if not data.get("userGames") or len(data["userGames"]) == 0:
         raise ValueError("No user games data found in the input")
@@ -24,10 +36,6 @@ def parse_match_info(data: dict) -> dict:
     user_json = data["userGames"][0]
     start_dtm = datetime.strptime(user_json["startDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
     play_time = min(data["userGames"], key=lambda u: u["gameRank"])["playTime"]
-    
-    """play_time = next((u["playTime"] for u in data["userGames"] if u["gameRank"] == 1),
-                     next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 2),
-                        next(u["playTime"] for u in data["userGames"] if u["gameRank"] == 3))"""
                         
     match_expire_dtm = start_dtm + timedelta(seconds=play_time)
     match_info = {
@@ -47,9 +55,13 @@ def parse_match_info(data: dict) -> dict:
     return match_info
 
 def parse_match_team_info(data: dict) -> List[dict]:
-    """
-    Parse team information from the JSON data.
-    Returns a list of dictionaries with match_team_info table data.
+    """매치 데이터에서 팀별 주요 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 팀의 주요 정보를 담은 딕셔너리의 리스트
     """
     team_info_list = []
     processed_team_ids = set()
@@ -57,7 +69,7 @@ def parse_match_team_info(data: dict) -> List[dict]:
     for user_json in data.get("userGames", []):
         team_id = user_json["teamNumber"]
         
-        # Skip if this team has already been processed
+        # Team id가 이미 있을 경우 skip
         if team_id in processed_team_ids:
             continue
         
@@ -74,20 +86,19 @@ def parse_match_team_info(data: dict) -> List[dict]:
             "team_elimination_count": user_json["teamElimination"]
         }
         
-        # Version-specific field mapping
         if is_older_version:
             team_info.update({
-                "team_down_in_auto_reserrection": user_json["teamDownInAutoResurrection"],
-                "team_down_after_auto_reserrection": user_json["teamDownDeactiveAutoResurrection"],
-                "team_repeat_down_in_auto_reserrection": user_json["teamRepeatDownInAutoResurrection"],
-                "team_repeat_down_after_auto_reserrection": user_json["teamRepeatDownDeactiveAutoResurrection"]
+                "team_down_in_auto_reserrection": user_json.get("teamDownInAutoResurrection", 0),
+                "team_down_after_auto_reserrection": user_json.get("teamDownDeactiveAutoResurrection", 0),
+                "team_repeat_down_in_auto_reserrection": user_json.get("teamRepeatDownInAutoResurrection", 0),
+                "team_repeat_down_after_auto_reserrection": user_json.get("teamRepeatDownDeactiveAutoResurrection", 0)
             })
         else:
             team_info.update({
-                "team_down_in_auto_reserrection": user_json["teamDownCanNotEliminate"],
-                "team_down_after_auto_reserrection": user_json["teamDownCanEliminate"],
-                "team_repeat_down_in_auto_reserrection": user_json["teamRepeatDownCanNotEliminate"],
-                "team_repeat_down_after_auto_reserrection": user_json["teamRepeatDownCanEliminate"]
+                "team_down_in_auto_reserrection": user_json.get("teamDownCanNotEliminate", 0),
+                "team_down_after_auto_reserrection": user_json.get("teamDownCanEliminate", 0),
+                "team_repeat_down_in_auto_reserrection": user_json.get("teamRepeatDownCanNotEliminate", 0),
+                "team_repeat_down_after_auto_reserrection": user_json.get("teamRepeatDownCanEliminate", 0)
             })
         
         team_info_list.append(team_info)
@@ -96,9 +107,13 @@ def parse_match_team_info(data: dict) -> List[dict]:
     return team_info_list
 
 def parse_match_user_basic(data: dict) -> List[dict]:
-    """
-    Parse basic user match information from the JSON data.
-    Returns a list of dictionaries with match_user_basic table data.
+    """매치 데이터에서 각 유저의 기본 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 기본 정보를 담은 딕셔너리의 리스트
     """
     user_basic_list = []
     
@@ -140,9 +155,13 @@ def parse_match_user_basic(data: dict) -> List[dict]:
     return user_basic_list
     
 def parse_match_user_equipment(data: dict) -> List[dict]:
-    """
-    Parse user equipment information from the JSON data.
-    Returns a list of dictionaries with match_user_equipment table data.
+    """매치 데이터에서 각 유저의 장비 및 첫 획득 장비 정보를 파싱하여 딕셔너리 리스트로 반환합니다.
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 장비 정보를 담은 딕셔너리의 리스트
     """
     def none_if_zero(val):
         # 리스트일 경우 마지막 값을 사용
@@ -179,9 +198,13 @@ def parse_match_user_equipment(data: dict) -> List[dict]:
     return user_equipment_list
 
 def parse_match_user_stat(data: dict) -> List[dict]:
-    """
-    Parse user stats information from the JSON data.
-    Returns a list of dictionaries with match_user_stat table data.
+    """매치 데이터에서 각 유저의 스탯을 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 스탯 정보를 담은 딕셔너리의 리스트
     """
     user_stat_list = []
     
@@ -217,9 +240,13 @@ def parse_match_user_stat(data: dict) -> List[dict]:
     return user_stat_list
 
 def parse_match_user_damage(data: dict) -> List[dict]:
-    """
-    Parse user damage information from the JSON data.
-    Returns a list of dictionaries with match_user_damage table data.
+    """매치 데이터에서 각 유저의 가한 피해량, 받은 피해량을 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 가한 피해량, 받은 피해량 정보를 담은 딕셔너리의 리스트
     """
     user_damage_list = []
     
@@ -246,9 +273,13 @@ def parse_match_user_damage(data: dict) -> List[dict]:
     return user_damage_list
 
 def parse_match_user_trait(data: dict) -> List[dict]:
-    """
-    Parse user trait information from the JSON data.
-    Returns a list of dictionaries with match_user_trait table data.
+    """매치 데이터에서 각 유저가 선택한 특성을 파싱하여 틱셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저가 선택한 특성 ID를 담은 딕셔너리 리스트
     """
     user_trait_list = []
     
@@ -268,9 +299,13 @@ def parse_match_user_trait(data: dict) -> List[dict]:
     return user_trait_list
 
 def parse_match_user_mmr(data: dict) -> List[dict]:
-    """
-    Parse user MMR information from the JSON data.
-    Returns a list of dictionaries with match_user_mmr table data.
+    """매치 데이터에서 각 유저의 MMR 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 MMR 정보를 담은 딕셔너리의 리스트
     """
     user_mmr_list = []
     
@@ -289,9 +324,13 @@ def parse_match_user_mmr(data: dict) -> List[dict]:
     return user_mmr_list
 
 def parse_user_match_kda_detail(data: dict) -> List[dict]:
-    """
-    Parse user KDA detail information from the JSON data.
-    Returns a list of dictionaries with user_match_kda_detail table data.
+    """매치 데이터에서 각 유저의 KDA 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 KDA를 담은 딕셔너리의 리스트
     """
     user_kda_list = []
     
@@ -312,9 +351,13 @@ def parse_user_match_kda_detail(data: dict) -> List[dict]:
     return user_kda_list
 
 def parse_match_user_sight(data: dict) -> List[dict]:
-    """
-    Parse user sight information from the JSON data.
-    Returns a list of dictionaries with match_user_sight table data.
+    """매치 데이터에서 각 유저의 시야 관련 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 시야 관련 행동 정보를 담은 딕셔너리의 리스트
     """
     user_sight_list = []
     
@@ -334,9 +377,13 @@ def parse_match_user_sight(data: dict) -> List[dict]:
     return user_sight_list
 
 def parse_object(data: dict) -> List[dict]:
-    """
-    Parse object information from the JSON data.
-    Returns a list of dictionaries with object table data.
+    """매치 데이터에서 각 유저의 몬스터 및 큐브 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 몬스터 및 큐브 정보를 담은 딕셔너리의 리스트
     """
     object_list = []
     
@@ -369,9 +416,13 @@ def parse_object(data: dict) -> List[dict]:
     return object_list
 
 def parse_match_user_gain_credit(data: dict) -> List[dict]:
-    """
-    Parse user credit gain information from the JSON data.
-    Returns a list of dictionaries with match_user_gain_credit table data.
+    """매치 데이터에서 각 유저의 크레딧 획득 경로를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 크레딧 획득 경로를 담은 딕셔너리의 리스트
     """
     user_gain_credit_list = []
     
@@ -420,9 +471,13 @@ def parse_match_user_gain_credit(data: dict) -> List[dict]:
     return user_gain_credit_list
 
 def parse_match_user_use_credit(data: dict) -> List[dict]:
-    """
-    Parse user credit usage information from the JSON data.
-    Returns a list of dictionaries with match_user_use_credit table data.
+    """매치 데이터에서 각 유저의 크레딧 사용 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 크레딧 사용 정보를 담은 딕셔너리의 리스트
     """
     user_use_credit_list = []
     
@@ -460,9 +515,13 @@ def parse_match_user_use_credit(data: dict) -> List[dict]:
     return user_use_credit_list
 
 def parse_match_user_credit_time(data: dict) -> List[dict]:
-    """
-    Parse user credit time information from the JSON data.
-    Returns a list of dictionaries with match_user_credit_time table data.
+    """각 유저의 1분 단위 크레딧 사용/획득량을 매치 데이터에서 추출하여 최대 20분까지 딕셔너리 리스트로 반환
+
+    Args:
+        data (dict): 'userGames' 키를 포함한 매치 원본 데이터
+
+    Returns:
+        List[dict]: 각 유저의 분 단위 크레딧 사용/획득 정보를 담은 딕셔너리의 리스트
     """
     user_credit_time_list = []
     
@@ -489,9 +548,13 @@ def parse_match_user_credit_time(data: dict) -> List[dict]:
     return user_credit_time_list
 
 def parse_match_data(data: dict) -> Dict[str, Any]:
-    """
-    Main function to parse all match data from the JSON input.
-    Returns a dictionary containing all parsed tables.
+    """경기와 관한 정보를 파싱하여 딕셔너리로 반환
+
+    Args:
+        data (dict): 매치 원본 데이터
+
+    Returns:
+        Dict[str, Any]: 매치에 관한 주요 정보를 담은 딕셔너리
     """
     try:
         result = {
@@ -517,6 +580,15 @@ def parse_match_data(data: dict) -> Dict[str, Any]:
         raise
     
 def parse_game_character(character_data: dict, levelup_data: dict) -> List[dict]:
+    """캐릭터 기본 정보와 레벨업 능력치 데이터를 합쳐 캐릭터별 정보를 딕셔너리 리스트로 반환
+
+    Args:
+        character_data (dict): 캐릭터 기본 정보 데이터
+        levelup_data (dict): 캐릭터 레벨업 능력치 데이터
+
+    Returns:
+        List[dict]: 각 캐릭터의 주요 정보 및 성장 능력치를 담은 딕셔너리 리스트
+    """
     game_character_list = []
     
     # levelup_data를 character_id 기준으로 빠르게 찾을 수 있도록 dict로 변환
@@ -554,9 +626,14 @@ def parse_game_character(character_data: dict, levelup_data: dict) -> List[dict]
     return game_character_list
 
 def parse_equipment(armor_data: dict, weapon_data: dict) -> List[dict]:
-    """
-    Parse equipment and weapon data from the JSON structure.
-    Returns a unified list of dictionaries for match_equipment table.
+    """장비 및 무기 데이터에서 주요 정보를 파싱하여 딕셔너리 리스트로 반환
+
+    Args:
+        armor_data (dict): 방어구(Armor) 정보가 담긴 데이터
+        weapon_data (dict): 무기(Weapon) 정보가 담긴 데이터
+
+    Returns:
+        List[dict]: 각 장비 및 무기의 주요 정보를 담은 딕셔너리의 리스트
     """
     equipment_list = []
     item_grade = ["Uncommon", "Common", "Rare", "Epic", "Legend", "Mythic"]
@@ -608,6 +685,14 @@ def parse_equipment(armor_data: dict, weapon_data: dict) -> List[dict]:
     return equipment_list
 
 def parse_txt_to_dict(txt: str) -> Dict[str, str]:
+    """특정 구분자(┃)로 구분된 텍스트를 key-value 딕셔너리로 변환
+
+    Args:
+        txt (str): 각 줄이 '키┃값' 형태로 이루어진 텍스트
+
+    Returns:
+        Dict[str, str]: 키-값 쌍으로 이루어진 딕셔너리
+    """
     result = {}
     for line in txt.strip().splitlines():
         if "┃" in line:
@@ -616,6 +701,15 @@ def parse_txt_to_dict(txt: str) -> Dict[str, str]:
     return result
 
 def parse_trait_info(data: dict, txt_mapping: Dict[str, str]) -> List[dict]:
+    """특정 구분자(┃)로 구분된 텍스트에서 특성 관련 정보를 trait_id-trait_name 형식의 딕셔너리로 변환
+
+    Args:
+        data (dict): 특성 정보가 담긴 데이터
+        txt_mapping (Dict[str, str]): 특성 코드에 대응하는 이름 매핑 딕셔너리
+
+    Returns:
+        List[dict]: 각 특성의 ID와 이름을 담은 딕셔너리 리스트
+    """
     trait_list = []
     
     for trait_json in data.get("data", []):
