@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 from typing import List
 from time import sleep
-
+import logging
 load_dotenv()
 
 DB_HOST = os.getenv("DB_HOST")
@@ -164,3 +164,29 @@ def is_table_empty(conn, table_name: str) -> bool:
     with conn.cursor() as cursor:
         cursor.execute(f"SELECT 1 FROM {table_name} LIMIT 1;")
         return cursor.fetchone() is None
+    
+    
+def save_parsed_data_to_db(conn, parsed_data: list) -> None:
+    """DB에 파싱한 데이터를 적재
+
+    Args:
+        conn (_type_): 데이터베이스 연결 객체
+        parsed_data (_type_): 적재할 데이터
+        
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        with conn.cursor() as cursor:
+            sql = f"SHOW TABLES FROM er_dataset;"
+            cursor.execute(sql)
+            tables = [t_name[0] for t_name in cursor.fetchall()]
+            
+        for table in tables:
+            if table in parsed_data and parsed_data[table]:
+                if isinstance(parsed_data[table], dict) and parsed_data[table]:
+                    insert_dict(conn, table, parsed_data[table])
+                elif isinstance(parsed_data[table], list) and parsed_data[table]:
+                    insert_list(conn, table, parsed_data[table])        
+    except Exception as e:
+        logger.error(f"Error saving data to DB: {e}")
+        raise
