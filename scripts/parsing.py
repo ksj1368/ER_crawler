@@ -32,7 +32,7 @@ def parse_match_info(data: dict) -> dict:
     if not data.get("userGames") or len(data["userGames"]) == 0:
         raise ValueError("No user games data found in the input")
     
-    # Using first user data to get match info
+    # 첫 번째 user data를 사용
     user_json = data["userGames"][0]
     start_dtm = datetime.strptime(user_json["startDtm"], "%Y-%m-%dT%H:%M:%S.%f%z")
     play_time = min(data["userGames"], key=lambda u: u["gameRank"])["playTime"]
@@ -533,7 +533,7 @@ def parse_match_user_credit_time(data: dict) -> List[dict]:
             used_credit = user_json["usedVFCredits"][minute]
             gain_credit = user_json["totalVFCredits"][minute]
             
-            # Only add entries where there's credit activity
+            # credit이 0이 아닌 경우에만 저장
             if used_credit != 0 or gain_credit != 0:
                 user_credit_time = {
                     "match_id": match_id,
@@ -716,7 +716,7 @@ def parse_trait_info(data: dict, txt_mapping: Dict[str, str]) -> List[dict]:
         if trait_json['traitGroup'] != 'Cobalt' and trait_json['traitGroup'] != "None":
             trait_code = trait_json['code']
             txt_key = f"Trait/Name/{trait_code}"
-            trait_name = txt_mapping[txt_key]  # fallback to API name if not found
+            trait_name = txt_mapping[txt_key]
             trait = {
                 'trait_id': trait_code,
                 "trait_name": trait_name,
