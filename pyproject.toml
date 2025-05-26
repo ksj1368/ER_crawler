@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "ER-crawler"
 version = "0.1.0"
-description = "A Eternal Return crawling for Data Analysis using Docker and Poetry"
+description = "A Eternal Return crawling"
 authors = ["JSJ <ksj006151@gmail.com>"]
 packages = [
     { include = "scripts" }
