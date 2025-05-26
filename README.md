@@ -1,6 +1,6 @@
 # Eternal Return API Crawler
 
-배틀로얄 게임 "[이터널 리턴(Eternal Return)](https://playeternalreturn.com/main?hl=ko-KR)"의 공식 API를 크롤링 시스템입니다. 상위 랭커들의 경기 데이터를 수집하여 메타 분석과 통계 분석을 위한 데이터셋을 구축합니다.
+배틀로얄 게임 "[이터널 리턴(Eternal Return)](https://playeternalreturn.com/main?hl=ko-KR)"의 API를 사용하는 크롤링 시스템입니다. 상위 랭커들의 경기 데이터를 수집하여 메타 분석과 통계 분석을 위한 데이터셋을 구축합니다.
 
 ## 주요 기능
 
