@@ -53,7 +53,6 @@
 ## 설치 및 설정
 ### 프로젝트 설치
 ```bash
-# 저장소 클론
 git clone 
 cd ER-crawler
 
