@@ -16,8 +16,7 @@ if __name__ == "__main__":
     start_time = time()
     start_dt_str = datetime.fromtimestamp(start_time).strftime("%Y-%m-%d_%H-%M-%S")
     
-    users = get_top_ranker(season=31, matching_mode=3)
-    #users = get_top_ranker(season=29, matching_mode=3)
+    users = get_top_ranker(season=os.getenv("season_id"), matching_mode=os.getenv("matching_mode"))
     users, nicknames = top_ranker_id(users)
     user_chunks = split_into_chunks(users[:2], 100) # 100개씩 분할
     
@@ -29,8 +28,7 @@ if __name__ == "__main__":
         logger.info(f"Processing user batch {idx+1}/{len(user_chunks)} ({len(user_chunk)} users)")
         success_count, total_count = collect_data(
             users=user_chunk,
-            # main_version=45,
-            main_version=46,
+            main_version=os.getenv("main_version"), # 46
             batch_size=100,
             log_dir = LOG_DIR,
             start_date = start_dt_str
