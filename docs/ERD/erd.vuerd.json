@@ -4,9 +4,9 @@
   "settings": {
     "width": 3000,
     "height": 3000,
-    "scrollTop": -1542.2419,
-    "scrollLeft": -86,
-    "zoomLevel": 1,
+    "scrollTop": -628.2311,
+    "scrollLeft": -941.4534,
+    "zoomLevel": 0.34,
     "show": 431,
     "database": 4,
     "databaseName": "",
@@ -329,7 +329,7 @@
           "color": ""
         },
         "meta": {
-          "updateAt": 1745240559886,
+          "updateAt": 1748296158040,
           "createAt": 1745240478156
         }
       },
@@ -6483,6 +6483,5 @@
     "indexEntities": {},
     "indexColumnEntities": {},
     "memoEntities": {}
-  },
-  "lww": {}
+  }
 }
