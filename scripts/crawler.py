@@ -1,11 +1,14 @@
 import os
 import asyncio
 import aiohttp
+import random
 from dotenv import load_dotenv
 import requests
-from typing import List, Dict, Any
+from typing import List, Dict, Any, AsyncGenerator, Tuple
 from functools import lru_cache
 from tqdm import tqdm
+from aiolimiter import AsyncLimiter
+from scripts.logger import logger
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()
@@ -28,8 +31,8 @@ def get_character():
     if response_c.status_code == 200 and response_cl.status_code == 200:
         return response_c.json(), response_cl.json()
     else:
-        print(f"[Error] get_character - status_code: {response_c.status_code}")
-        print(f"[Error] get_character - status_code: {response_cl.status_code}")
+        logger.error(f"get_character - status_code: {response_c.status_code}")
+        logger.error(f"get_character - status_code: {response_cl.status_code}")
         return None
 
 @lru_cache(maxsize=None)
@@ -42,8 +45,8 @@ def get_equipment():
     if response_armor.status_code == 200 and response_weapon.status_code == 200:
         return response_armor.json(), response_weapon.json()
     else:
-        print(f"[Error] get_equipment armor - status_code: {response_armor.status_code}")
-        print(f"[Error] get_equipment weapon - status_code: {response_weapon.status_code}")
+        logger.error(f"get_equipment armor - status_code: {response_armor.status_code}")
+        logger.error(f"get_equipment weapon - status_code: {response_weapon.status_code}")
         return None
     
 @lru_cache(maxsize=None)
@@ -59,7 +62,55 @@ def get_trait() -> dict | None:
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"[Error] get_trait - status_code: {response.status_code}")
+        logger.error(f"get_trait - status_code: {response.status_code}")
+        return None
+    
+@lru_cache(maxsize=None)
+def get_monster() -> dict | None:
+    """_summary_
+
+    Returns:
+        dict | None: _description_
+    """
+    url = f'{BASE_URL}/v2/data/Monster'    
+    response = requests.get(url, headers=HEADERS_WITH_KEY)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        logger.error(f"get_monster - status_code: {response.status_code}")
+        return None
+    
+@lru_cache(maxsize=None)
+def get_area() -> dict | None:
+    """_summary_
+
+    Returns:
+        dict | None: _description_
+    """
+    url = f'{BASE_URL}/v2/data/Area'    
+    response = requests.get(url, headers=HEADERS_WITH_KEY)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        logger.error(f"get_area - status_code: {response.status_code}")
+        return None
+        
+@lru_cache(maxsize=None)
+def get_char_lv() -> dict | None:
+    """_summary_
+
+    Returns:
+        dict | None: _description_
+    """
+    url = f'{BASE_URL}/v2/data/CharacterLevelUpStat'    
+    response = requests.get(url, headers=HEADERS_WITH_KEY)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        logger.error(f"get_char_lv - status_code: {response.status_code}")
         return None
 
 @lru_cache(maxsize=None)
@@ -69,125 +120,181 @@ def get_l10n() -> str | None:
     Returns:
         str | None: _description_
     """
-    url = 'https://d1wkxvul68bth9.cloudfront.net/l10n/l10n-Korean-20250417055750.txt'
+    url = 'https://open-api.bser.io/v1/l10n/Korean'
+    #url = 'https://d1wkxvul68bth9.cloudfront.net/l10n/l10n-Korean-20250417055750.txt'
     response = requests.get(url, headers=HEADERS_WITH_KEY)
-        
     if response.status_code == 200:
         response.encoding = response.apparent_encoding
-        l10n = response.text
-        return l10n
+        l10n = response.json()
+        l10n_url = l10n['data']["l10Path"]
+        
+        response = requests.get(l10n_url, headers=HEADERS_WITH_KEY)
+        if response.status_code == 200:
+            response.encoding = response.apparent_encoding
+            l10n = response.text.splitlines()
+            return l10n
+        else:
+            logger.error((f"get ln10n text file - status_code: {response.status_code}"))
     else:
-        print(f"[Error] get_trait - status_code: {response.status_code}")
+        logger.error(f"get_l10n - status_code: {response.status_code}")
         return None
 
-def get_top_ranker(season: int, matching_mode: int) -> dict | None:
+def get_top_ranker(season: int, region: int, matching_mode: int) -> dict | None:
     """특정 시즌, 지역, 매칭 모드에서의 상위 랭커 정보를 반환
 
     Args:
-        season (int): 게임 시즌(예: 31 -> (7시즌), 32(7시즌 프리시즌))
+        season (int): 게임 시즌(예: 31: 7시즌, 32: 7시즌 프리시즌)
+        region (int): 게임 서버 코드(10: asia(kr), 17: asia2(cn), 12: NorthAmerica)
         matching_mode (int): 게임 모드(1: 솔로, 2: 듀오, 3: 스쿼드)
 
     Returns:
          dict | None: 
         
     """
-    url = f"{BASE_URL}/v1/rank/top/{season}/{matching_mode}"
+    url = f"{BASE_URL}/v1/rank/top/{season}/{matching_mode}/{region}"
     response = requests.get(url, headers=HEADERS_WITH_KEY)
-
+    
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"[Error] get_top_ranker - status_code: {response.status_code}")
+        logger.error(f"get_top_ranker - status_code: {response.status_code}")
         return None
 
-async def fetch_user_games(session, url: str) -> dict:
+async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries: int = 5, delay: int = 1) -> dict:
     """유저의 match 정보를 가져오는 함수
 
     Args:
-        session (_type_): _description_
-        url (str): _description_
+        session (_type_): aiohttp client session
+        url (str): url to fetch
+        limiter (AsyncLimiter): API 호출 빈도를 제어합니다.
+        max_retries (int): maximum number of retries
+        delay (int): delay between retries in seconds
 
     Returns:
         dict: _description_
     """
-    # url = f"{BASE_URL}/v1/user/games/{user_num}"
-    async with session.get(url) as response:
-        if response.status == 200:
-            return await response.json()
-        else:
-            print(f"[Error] fetch_user_games - status_code: {response.status}")
-            return None
+    for attempt in range(max_retries):
+        async with limiter:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return await response.json()
+                
+                retry_delay = delay + random.uniform(0, 1)
+                logger.warning(f"fetch_user_games - status_code: {response.status}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries})")
 
-async def get_match_ids_async(user_nums: List[int], main_version: int) -> List[int]:
+        await asyncio.sleep(retry_delay)
+
+    logger.error(f"fetch_user_games - Failed to fetch after {max_retries} attempts for url: {url}")
+    return None
+
+async def get_match_ids_async(user_ids: List[int], main_version: int) -> List[int]:
     """비동기적으로 여러 사용자의 게임 ID를 수집합니다.
-        각 사용자별로 수집 게임 수를 제한할 수 있습니다.
-
-    Returns:
-        _type_: _description_
+    aiolimiter를 사용하여 API 호출 빈도를 제어합니다.
     """
     match_ids_set = set()
-    
+    limiter = AsyncLimiter(50, 1)
+    failed_urls = []
+
+    async def process_user(session, user_id):
+        """한 명의 유저에 대한 모든 매치 기록을 페이지네이션하며 수집합니다."""
+        next_page = None
+        while True:
+            url = f"{BASE_URL}/v1/user/games/{user_id}"
+            if next_page:
+                url += f"?next={next_page}"
+
+            data = await fetch_user_games(session, url, limiter)
+            
+            if not data or "userGames" not in data:
+                failed_urls.append(url)
+                break
+
+            stop_crawling = False
+            for game in data["userGames"]:
+                if game["versionMajor"] > main_version:
+                    continue
+                elif game["versionMajor"] == main_version:
+                    if game["matchingMode"] == 3:
+                        match_ids_set.add(game["gameId"])
+                else:
+                    stop_crawling = True
+                    break
+            
+            if stop_crawling or not data.get('next'):
+                break
+            
+            next_page = data['next']
+
     async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
-        tasks = []
-        for user_num in tqdm(user_nums):
-            url = f"{BASE_URL}/v1/user/games/{user_num}"
-            tasks.append(fetch_user_games(session, url))
-        
-        responses = await asyncio.gather(*tasks)
-        for user_num, data in zip(user_nums, responses):
-            while data and "userGames" in data:
-                stop_crawling = False  # 중단 여부 플래그
-                for game in data["userGames"]:
-                    if game["versionMajor"] > main_version:
-                        continue  # 그냥 무시하고 다음 게임
-                    elif game["versionMajor"] == main_version:
-                        if game["matchingMode"] == 3:
-                            match_ids_set.add(game["gameId"])
-                    else:  # game["versionMajor"] < main_version
-                        stop_crawling = True
-                        break  # 버전이 낮으면 바로 탐색 종료
+        tasks = [process_user(session, user_id) for user_id in user_ids]
+        for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Fetching user games"):
+            await f
 
-                if stop_crawling or not data.get('next'):
-                    break  # 크롤링 중단 또는 next 없으면 종료
+        if failed_urls:
+            logger.info(f"Retrying {len(failed_urls)} failed URLs...")
+            
+            async def process_failed_url(session, url):
+                current_url = url
+                while current_url:
+                    data = await fetch_user_games(session, current_url, limiter)
 
-                # 다음 페이지로 이동
-                url = f"{BASE_URL}/v1/user/games/{user_num}?next={data['next']}"
-                data = await fetch_user_games(session, url)
+                    if not data or "userGames" not in data:
+                        logger.warning(f"Failed to fetch retried URL: {current_url}")
+                        break
+
+                    stop_crawling = False
+                    for game in data["userGames"]:
+                        if game["versionMajor"] > main_version:
+                            continue
+                        elif game["versionMajor"] == main_version:
+                            if game["matchingMode"] == 3:
+                                match_ids_set.add(game["gameId"])
+                        else:
+                            stop_crawling = True
+                            break
+                    
+                    if stop_crawling or not data.get('next'):
+                        break
+                    
+                    base_user_url = current_url.split('?')[0]
+                    current_url = f"{base_user_url}?next={data['next']}"
+
+            retry_tasks = [process_failed_url(session, url) for url in failed_urls]
+            for f in tqdm(asyncio.as_completed(retry_tasks), total=len(retry_tasks), desc="Retrying failed URLs"):
+                await f
 
     return list(match_ids_set)
 
-async def fetch_match_info(session, match_id):
+async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries: int = 3, delay: int = 1):
     """비동기적으로 단일 게임 정보를 가져옵니다."""
     url = f"{BASE_URL}/v1/games/{match_id}"
-    async with session.get(url) as response:
-        if response.status == 200:
-            return match_id, await response.json()
-        else:
-            print(f"[Error] fetch_match_info - match_id: {match_id}, status_code: {response.status}")
-            return match_id, None
+    for attempt in range(max_retries):
+        async with limiter:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    return match_id, await response.json()
+                
+                retry_delay = delay + random.uniform(0, 1)
+                logger.warning(f"fetch_match_info - match_id: {match_id}, status_code: {response.status}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries})")
+        
+        await asyncio.sleep(retry_delay)
 
-async def get_match_infos_async(match_ids: List[int], batch_size: int = 10) -> Dict[int, Any]:
+    logger.error(f"fetch_match_info - Failed to fetch match {match_id} after {max_retries} attempts.")
+    return match_id, None
+
+async def get_match_infos_async(match_ids: List[int], batch_size: int = 100) -> AsyncGenerator[Tuple[int, Any], None]:
     """
-    비동기적으로 여러 게임의 정보를 배치 단위로 수집합니다.
+    비동기적으로 여러 게임의 정보를 수집하고 yield합니다.
+    aiolimiter를 사용하여 API 호출 빈도를 제어합니다.
     """
-    result = {}
-    
+    limiter = AsyncLimiter(50, 1)
     async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
-        # 배치 단위로 처리
         for i in range(0, len(match_ids), batch_size):
-            batch = match_ids[i:i+batch_size]
-            tasks = [fetch_match_info(session, match_id) for match_id in batch]
-            batch_results = await asyncio.gather(*tasks)
-            
-            for match_id, data in batch_results:
-                if data:
-                    result[match_id] = data
-            
-            # 배치 간 짧은 대기 시간 추가하여 API 서버 부하 방지
-            if i + batch_size < len(match_ids):
-                await asyncio.sleep(0.5)
-    
-    return result
+            batch = match_ids[i:i + batch_size]
+            tasks = [fetch_match_info(session, match_id, limiter) for match_id in batch]
+            for future in asyncio.as_completed(tasks):
+                match_id, data = await future
+                yield match_id, data
 
 def match_info(match_id: int) -> dict | None:
     """
@@ -199,5 +306,5 @@ def match_info(match_id: int) -> dict | None:
     if response.status_code == 200:
         return response.json()
     else:
-        print(f"[Error] match_info - status_code: {response.status_code}")
+        logger.error(f"match_info - status_code: {response.status_code}")
         return None
