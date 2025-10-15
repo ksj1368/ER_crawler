@@ -66,3 +66,40 @@ def execute_sql_file(engine: Engine, file_path: str):
             for stmt in statements:
                 conn.execute(text(stmt))
     logger.info(f"Successfully executed SQL script: {file_path}")
+    
+def user_table_update(engine: Engine):
+    """match_user_start 테이블의 유저를 기준으로 user 테이블을 추가 및 업데이트합니다."""
+    insert_sql = """
+    INSERT INTO user (user_id, creation_date, update_date)
+    SELECT m.user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    FROM (SELECT DISTINCT user_id FROM match_user_start) AS m
+    LEFT JOIN user u ON m.user_id = u.user_id
+    WHERE u.user_id IS NULL;
+    """
+    
+    update_sql = """
+    UPDATE user
+    SET update_date = CURRENT_TIMESTAMP
+    WHERE user_id IN (SELECT DISTINCT user_id FROM match_user_start);
+    """
+    
+    with engine.connect() as conn:
+        with conn.begin():
+            insert_result = conn.execute(text(insert_sql))
+            if insert_result.rowcount > 0:
+                logger.info(f"Added {insert_result.rowcount} new users to 'user' table.")
+            else:
+                logger.info("No new users to add to 'user' table.")
+            
+            update_result = conn.execute(text(update_sql))
+            if update_result.rowcount > 0:
+                logger.info(f"Updated {update_result.rowcount} users in 'user' table.")
+            else:
+                logger.info("No users to update in 'user' table.")
+
+def get_all_user_ids(engine: Engine) -> list[int]:
+    """DB에 있는 모든 유저 ID를 조회하여 리스트로 반환합니다."""
+    with engine.connect() as conn:
+        stmt = text("SELECT user_id FROM user")
+        result = conn.execute(stmt)
+        return [row[0] for row in result]
