@@ -17,11 +17,12 @@
 -- =================================================================================
 
 -- 수집이 끝나면 갱신
--- CREATE TABLE user
--- (
---   user_id       INT         NOT NULL COMMENT 'userNum', 
---   update_date   DATETIME    NOT NULL
--- );
+CREATE TABLE user
+(
+  user_id       INT      PRIMARY KEY NOT NULL COMMENT 'userNum',
+  update_date   DATETIME    NOT NULL,
+  creation_date DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 CREATE TABLE area_info (
   area_id INT COMMENT '원본 JSON 키: code',
@@ -306,7 +307,7 @@ CREATE TABLE match_user_combat (
   FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
 ) COMMENT '매치 유저 전투 정보';
 
-CREATE TABLE match_user_traits (
+CREATE TABLE match_user_trait (
     match_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     trait_id INT NOT NULL COMMENT 'traitFirstSub, traitSecondSub 배열의 요소',
