@@ -9,7 +9,7 @@ from tqdm.asyncio import tqdm
 
 from scripts.config import SEASON_ID, MATCHING_MODE, MAIN_VERSION, REGION_ID
 from scripts.crawler import get_top_ranker, get_match_ids_async, get_match_infos_async
-from scripts.db_utils import get_engine, check_match_exists, save_dataframes_to_db
+from scripts.db_utils import get_engine, check_match_exists, save_dataframes_to_db, user_table_update, get_all_user_ids
 from scripts.match_info_parsing import top_ranker_id, parse_match_data
 from scripts.logger import logger
 
@@ -25,7 +25,7 @@ async def test_pipeline(num_matches: int = 10, output_dir: str = "test_results")
         logger.error("Failed to get top rankers for test. Exiting.")
         return
     user_ids, _ = top_ranker_id(users_json)
-    
+
     # 2. 매치 ID 수집(10명)
     logger.info("Collecting match IDs for test...")
     match_ids = await get_match_ids_async(user_ids[:10], MAIN_VERSION)
@@ -168,21 +168,39 @@ async def process_matches_in_batches(match_ids: List[int], batch_size: int):
         "db_saved": db_saved_count
     }
 
-def run_pipeline():
-    """전체 데이터 수집 및 처리 파이프라인 실행"""
+def run_pipeline(user_id_source: str = 'top_rankers'):
+    """전체 데이터 수집 및 처리 파이프라인 실행
+
+    Args:
+        user_id_source (str, optional): 'top_rankers' 또는 'all_users'. Defaults to 'top_rankers'.
+    """
     load_dotenv()
     start_time = time()
     
-    logger.info("Starting data collection pipeline.")
+    logger.info(f"Starting data collection pipeline with user_id_source: {user_id_source}")
     engine = get_engine()
 
-    # 1. 상위 랭커 유저 목록 가져오기
-    users_json = get_top_ranker(season=SEASON_ID, matching_mode=MATCHING_MODE, region=REGION_ID)
-    if not users_json:
-        logger.error("Failed to get top rankers. Exiting.")
+    user_ids = []
+    if user_id_source == 'top_rankers':
+        # 1. 상위 랭커 유저 목록 가져오기
+        users_json = get_top_ranker(season=SEASON_ID, matching_mode=MATCHING_MODE, region=REGION_ID)
+        if not users_json:
+            logger.error("Failed to get top rankers. Exiting.")
+            return
+        user_ids, _ = top_ranker_id(users_json)
+        # user_ids = user_ids[:6] # 테스트를 위해 일부 유저만 사용
+    elif user_id_source == 'all_users':
+        # 1. DB에서 모든 유저 ID 가져오기
+        logger.info("Fetching all user IDs from the database...")
+        user_ids = get_all_user_ids(engine)
+        # user_ids = user_ids[:6] # 테스트를 위해 일부 유저만 사용
+        if not user_ids:
+            logger.warning("No user IDs found in the database. Exiting.")
+            return
+    else:
+        logger.error(f"Invalid user_id_source: {user_id_source}. Choose 'top_rankers' or 'all_users'.")
         return
-    user_ids, _ = top_ranker_id(users_json)
-    
+
     # 2. API로부터 모든 매치 ID 수집
     logger.info(f"Collecting all match IDs for {len(user_ids)} users...")
     all_match_ids = asyncio.run(get_match_ids_async(user_ids, MAIN_VERSION))
@@ -218,5 +236,13 @@ def run_pipeline():
     logger.info(f"Database Save: {db_saved} processed, {db_failed} failed.")
     logger.info("------------------------")
 
+    logger.info("Updating user table...")
+    user_table_update(engine)
+    logger.info("User table update complete.")
+
 if __name__ == '__main__':
-    run_pipeline()
+    import sys
+    source = 'top_rankers' # 기본값
+    if len(sys.argv) > 1:
+        source = sys.argv[1]
+    run_pipeline(user_id_source=source)
