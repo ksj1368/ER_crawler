@@ -73,4 +73,20 @@ if __name__ == "__main__":
     
     # 2. Run the main pipeline for match data
     logger.info("--- Starting Match Data Collection Pipeline ---")
-    run_pipeline()
+    
+    while True:
+        print("Select the source for user IDs:")
+        print("1: Top Rankers")
+        print("2: All Users from DB")
+        choice = input("Enter your choice (1 or 2): ")
+        
+        if choice == '1':
+            user_id_source = 'top_rankers'
+            break
+        elif choice == '2':
+            user_id_source = 'all_users'
+            break
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+            
+    run_pipeline(user_id_source=user_id_source)
