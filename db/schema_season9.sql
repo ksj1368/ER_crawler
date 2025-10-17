@@ -240,6 +240,7 @@ CREATE TABLE match_user_start (
   using_default_game_option BOOLEAN COMMENT '원본 JSON 키: usingDefaultGameOption',
   premade_matching_type INT COMMENT '원본 JSON 키: premadeMatchingType',
   tactical_skill_id INT COMMENT '원본 JSON 키: tacticalSkillGroup',
+  mlbot BOOLEAN COMMENT '원본 JSON 키: mlbot',
   PRIMARY KEY (match_id, user_id),
   FOREIGN KEY (match_id, team_number) REFERENCES match_team_info (match_id, team_number) ON DELETE CASCADE,
   INDEX idx_user_id (user_id),
