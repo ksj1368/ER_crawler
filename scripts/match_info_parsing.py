@@ -327,13 +327,18 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
     }
 
     # 드론 아이템 코드 대상 매핑
+    if data['userGames']['versionSeason'] <= 8:
+        fried_chicken_cr = 25
+    else:
+        fried_chicken_cr = 20
+        
     drone_item_mapping = {
         502308: ("emp_drone", "remotedrone_item", 30),
         502208: ("basic_drone", "remotedrone_item", 20),
         502207: ("camera", "remotedrone_item", 20),
         502405: ("guillotine", "remotedrone_item", 100),
         502404: ("c4", "remotedrone_item", 100),
-        301316: ("fried_chicken", "remotedrone_item", 25),
+        301316: ("fried_chicken", "remotedrone_item", fried_chicken_cr),
     }
     
     # 로봇이 판매하는 특정 아이템의 고정 가격
