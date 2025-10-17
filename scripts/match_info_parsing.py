@@ -274,6 +274,7 @@ def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
         "ItemBounty": ("bounty", "special"), "ItemBountyByItemCode": ("bounty", "special"),
         "GetBySkill": ("special", "skill"), "TraitSkillCoinToss": ("special", "trait"),
         "crGetCreditBonus": ("special", "skill"),
+        "AcquireBoriCredit": ("env", "bori"),
     }
     skip_cr_sources = {"KioskSpecialMaterial", "guideRobotFlagShip", "guideRobotSignature", "guideRobotRadial", "KioskRemoteDroneMySelf", "KioskResurrection", "KioskRemoteDroneAlly", "TacticalSkillUpgrade"}
     
