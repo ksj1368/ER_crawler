@@ -350,7 +350,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
     }
 
     discount_trait_code = 7210801
-    discoount_amount = 15
+    discount_amount = 15
     discount_target_items = {401401, 401403, 401304, 401208, 401209, 999999}
 
     for u in data.get("userGames", []):
@@ -364,7 +364,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             for item_code in discount_target_items:
                 if item_code in kiosk_prices:
                     name, type, cost = kiosk_prices[item_code]
-                    kiosk_prices[item_code] = (name, type, cost - discoount_amount)
+                    kiosk_prices[item_code] = (name, type, cost - discount_amount)
         
         console_items_log = u.get("itemTransferredConsole", []).copy()
         special_material_spent = {key: u.get(key, 0) for key in special_material_keys}
