@@ -434,11 +434,15 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             
             # Counter에 남아있는 아이템들이 'etc'에 해당
             other_items_count = sum(drone_item_counts.values())
+            if data['userGames']['versionSeason'] <= 8:
+                other_item_cr = 15
+            else:
+                other_item_cr = 10
             if other_items_count > 0:
                 expenditure_list.append({
                     "match_id": match_id, "user_id": user_id,
                     "expenditure_item": "etc", "expenditure_type": "remotedrone_item",
-                    "credit_amount": int(other_items_count * 15), "usage_count": other_items_count
+                    "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count
                 })
     return pd.DataFrame(expenditure_list)
 
