@@ -119,6 +119,7 @@ def parse_match_user_start(data: dict) -> pd.DataFrame:
             "using_default_game_option": u.get("usingDefaultGameOption", True),
             "premade_matching_type": u.get("premadeMatchingType", 0),
             "tactical_skill_id": u.get("tacticalSkillGroup",0), 
+            "mlbot": u.get("mlbot", False)
         } for u in data.get("userGames", [])
     ]
     return pd.DataFrame(user_basic_list)
