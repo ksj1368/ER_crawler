@@ -327,7 +327,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
     }
 
     # 드론 아이템 코드 대상 매핑
-    if data['userGames']['versionSeason'] <= 8:
+    if data['userGames'][0]['versionSeason'] <= 8:
         fried_chicken_cr = 25
     else:
         fried_chicken_cr = 20
@@ -434,7 +434,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             
             # Counter에 남아있는 아이템들이 'etc'에 해당
             other_items_count = sum(drone_item_counts.values())
-            if data['userGames']['versionSeason'] <= 8:
+            if data['userGames'][0]['versionSeason'] <= 8:
                 other_item_cr = 15
             else:
                 other_item_cr = 10
