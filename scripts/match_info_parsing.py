@@ -274,11 +274,11 @@ def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
         "GetBySkill": ("special", "skill"), "TraitSkillCoinToss": ("special", "trait"),
         "crGetCreditBonus": ("special", "skill"),
     }
-    SKIP_CREDIT_SOURCES = {"KioskSpecialMaterial", "guideRobotFlagShip", "guideRobotSignature", "guideRobotRadial", "KioskRemoteDroneMySelf", "KioskResurrection", "KioskRemoteDroneAlly", "TacticalSkillUpgrade"}
+    skip_cr_sources = {"KioskSpecialMaterial", "guideRobotFlagShip", "guideRobotSignature", "guideRobotRadial", "KioskRemoteDroneMySelf", "KioskResurrection", "KioskRemoteDroneAlly", "TacticalSkillUpgrade"}
     
     for u in data.get("userGames", []):
         for source, amount in u.get("creditSource", {}).items():
-            if source in SKIP_CREDIT_SOURCES or amount <= 0:
+            if source in skip_cr_sources or amount <= 0:
                 continue
             acq_type, src_cat = source_mapping.get(source, ("special", "unknown"))
             acquisition_list.append({
