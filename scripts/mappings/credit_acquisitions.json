@@ -1,0 +1,28 @@
+
+{
+    "source_mapping": {
+        "KillChicken": ["monster", "Monster"], "KillBat": ["monster", "Monster"],
+        "KillWolf": ["monster", "Monster"], "KillBoar": ["monster", "Monster"],
+        "KillWildDog": ["monster", "Monster"], "KillBear": ["monster", "Monster"],
+        "KillRaven": ["monster", "Monster"], "KillAttackDrone": ["monster", "Monster"],
+        "KillMutantChicken": ["monster", "Monster"], "KillMutantBat": ["monster", "Monster"],
+        "KillMutantWolf": ["monster", "Monster"], "KillMutantBoar": ["monster", "Monster"],
+        "KillMutantWildDog": ["monster", "Monster"], "KillMutantBear": ["monster", "Monster"],
+        "KillMutantRaven": ["monster", "Monster"], "KillAlpha": ["monster", "Epic"],
+        "KillOmega": ["monster", "Epic"], "KillGamma": ["monster", "Epic"],
+        "KillWickline": ["monster", "Boss"], "KillPlayerMerge": ["player", "player"],
+        "KillAssistDivideContribute": ["player", "player"], "GoldSecurityConsoleAccess": ["env", "env"],
+        "DoorConsoleAccess": ["env", "env"], "KillOrb": ["env", "orb"],
+        "AcquireLumiCredit": ["env", "lumi"], "PreliminaryPhase": ["timebased", "game"],
+        "TimeElapsedCompensationByMiliSecond": ["timebased", "game"],
+        "TimeElapsedCreditBonusByMiliSecond": ["timebased", "game"],
+        "ItemBounty": ["bounty", "special"], "ItemBountyByItemCode": ["bounty", "special"],
+        "GetBySkill": ["special", "skill"], "TraitSkillCoinToss": ["special", "trait"],
+        "crGetCreditBonus": ["special", "skill"],
+        "AcquireBoriCredit": ["env", "bori"]
+    },
+    "skip_cr_sources": [
+        "KioskSpecialMaterial", "guideRobotFlagShip", "guideRobotSignature", "guideRobotRadial", 
+        "KioskRemoteDroneMySelf", "KioskResurrection", "KioskRemoteDroneAlly", "TacticalSkillUpgrade"
+    ]
+}

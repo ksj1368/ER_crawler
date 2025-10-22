@@ -1,0 +1,23 @@
+
+{
+    "direct_metrics": {
+        "damage_to_rumi": ["damageToGuideRobot", "damage"],
+        "damage_to_monster": ["damageToMonster", "damage"],
+        "total_kill_monster": ["monsterKill", "kill_monster"],
+        "get_cube_red": ["getBuffCubeRed", "get_cube"],
+        "get_cube_green": ["getBuffCubeGreen", "get_cube"],
+        "get_cube_gold": ["getBuffCubeGold", "get_cube"],
+        "get_cube_purple": ["getBuffCubePurple", "get_cube"],
+        "get_cube_skyblue": ["getBuffCubeSkyBlue", "get_cube"]
+    },
+    "kill_monster_metrics": {
+        "8": "kill_alpha",
+        "9": "kill_omega",
+        "10": "kill_gamma",
+        "7": "kill_wickline"
+    },
+    "collect_log_metrics": {
+        "4": "collect_tree_of_life",
+        "5": "collect_meteorite"
+    }
+}

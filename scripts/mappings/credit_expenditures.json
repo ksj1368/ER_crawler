@@ -1,0 +1,61 @@
+
+{
+    "credit_source_mapping": {
+        "KioskResurrection": ["revival", 1],
+        "KioskRemoteDroneMySelf": ["remotedrone", 1],
+        "GuideRobotSignature": ["robot", 1],
+        "GuideRobotRadial": ["robot", 1],
+        "guideRobotFlagShip": ["robot", 1]
+    },
+    "console_item_mapping": {
+        "306001": ["gadget_pack", "kiosk_item", 20],
+        "301226": ["hamburger", "kiosk_item", 0],
+        "301246": ["apple_candy", "kiosk_item", 0],
+        "401401": ["vf_sample", "kiosk_item", 500],
+        "401403": ["forcecore", "kiosk_item", 350],
+        "401304": ["mythril", "kiosk_item", 250],
+        "401208": ["tree_of_life", "kiosk_item", 200],
+        "401209": ["meteorite", "kiosk_item", 200],
+        "999999": ["tactical_skill_upgrade", "kiosk_item", 200],
+        "502208": ["basic_drone", "robot_item", 5],
+        "502207": ["camera", "robot_item", 5]
+    },
+    "special_material_keys": {
+        "crUseVFBloodSample": 401401,
+        "crUseForceCore": 401403,
+        "crUseMythril": 401304,
+        "crUseTreeOfLife": 401208,
+        "crUseMeteorite": 401209
+    },
+    "drone_item_mapping_season_9_plus": {
+        "502308": ["emp_drone", "remotedrone_item", 30],
+        "502208": ["basic_drone", "remotedrone_item", 20],
+        "502207": ["camera", "remotedrone_item", 20],
+        "502405": ["guillotine", "remotedrone_item", 100],
+        "502404": ["c4", "remotedrone_item", 100],
+        "301316": ["fried_chicken", "remotedrone_item", 20]
+    },
+    "drone_item_mapping_season_8": {
+        "502308": ["emp_drone", "remotedrone_item", 30],
+        "502208": ["basic_drone", "remotedrone_item", 20],
+        "502207": ["camera", "remotedrone_item", 20],
+        "502405": ["guillotine", "remotedrone_item", 100],
+        "502404": ["c4", "remotedrone_item", 100],
+        "301316": ["fried_chicken", "remotedrone_item", 25]
+    },
+    "robot_fixed_prices": {
+        "401403": 320, 
+        "401304": 220,
+        "401208": 160,
+        "401209": 160
+    },
+    "discount_info": {
+        "trait_code": 7210801,
+        "amount": 15,
+        "target_items": [401401, 401403, 401304, 401208, 401209, 999999]
+    },
+    "other_drone_item_cost": {
+        "season_9_plus": 10,
+        "season_8": 15
+    }
+}
