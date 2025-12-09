@@ -568,10 +568,12 @@ def parse_match_data(data: dict) -> Dict[str, pd.DataFrame]:
     전체 매치 데이터 파싱
     """
     try:
-        return {
+        # match_user_start를 먼저 파싱하여 스노우볼링을 위한 uid/nickname mapping을 생성
+        df_user_start = parse_match_user_start(data)
+        parsed_dfs = {
             "match_info": parse_match_info(data),
             "match_team_info": parse_match_team_info(data),
-            "match_user_start": parse_match_user_start(data),
+            "match_user_start": df_user_start,
             "match_user_end": parse_match_user_end(data),
             "match_user_trait": parse_match_user_trait(data),
             "match_user_combat": parse_match_user_combat(data),
@@ -585,6 +587,7 @@ def parse_match_data(data: dict) -> Dict[str, pd.DataFrame]:
             "match_user_equipment": parse_match_user_equipment(data),
             "match_user_mmr": parse_match_user_mmr(data)
         }
+        return parsed_dfs
     except Exception as e:
         print(f"Error parsing match data: {e}")
         raise
