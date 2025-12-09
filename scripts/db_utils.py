@@ -2,6 +2,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, Connection
 import pandas as pd
 import logging
+from typing import List, Dict, Any
+from datetime import datetime
 
 from scripts.config import DATABASE_URL
 
