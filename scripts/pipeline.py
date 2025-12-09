@@ -1,5 +1,4 @@
 import asyncio
-import os
 from time import time
 from typing import List, Dict, Any
 
@@ -197,8 +196,22 @@ async def run_pipeline():
 
     elapsed_time = time() - start_time
     logger.info(f"--- Data collection pipeline finished in {elapsed_time:.2f} seconds ---")
+
+
+async def main():
+    """command에 알맞는 파이프라인 함수를 실행합니다."""
     import sys
-    source = 'top_rankers' # 기본값
     if len(sys.argv) > 1:
-        source = sys.argv[1]
-    run_pipeline(user_id_source=source)
+        command = sys.argv[1]
+        if command == 'seed':
+            await seed_top_rankers()
+        elif command == 'run':
+            await run_pipeline()
+        else:
+            print(f"Unknown command: {command}. Use 'seed' or 'run'.")
+    else:
+        print("Please provide a command: 'seed' or 'run'.")
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
