@@ -169,40 +169,43 @@ async def get_users_by_nickname_async(nicknames: List[str]) -> List[Dict[str, An
         results = await asyncio.gather(*tasks)
         return [user for user in results if user]
 
+
+def get_top_ranker(season_id: int, matching_mode: int, server_code: int) -> dict | None:
+    """상위 랭커 정보를 반환합니다."""
+    url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"get_top_ranker - status_code: {response.status_code}")
-        return None
+        data = response.json()
+        if data.get("code") == 200:
+            return data
+    logger.error(f"get_top_ranker - status_code: {response.status_code}, response: {response.text}")
+    return None
 
-async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries: int = 5, delay: int = 1) -> dict:
-    """유저의 match 정보를 가져오는 함수
 
-    Args:
-        session (_type_): aiohttp client session
-        url (str): url to fetch
-        limiter (AsyncLimiter): API 호출 빈도를 제어합니다.
-        max_retries (int): maximum number of retries
-        delay (int): delay between retries in seconds
-
-    Returns:
-        dict: _description_
-    """
+async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries: int = 5, delay: int = 1) -> Tuple[int, dict]:
+    """유저의 match 정보를 가져옵니다.(비동기방식)"""
     for attempt in range(max_retries):
-        async with limiter:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    return await response.json()
-                
-                retry_delay = delay + random.uniform(0, 1)
-                logger.warning(f"fetch_user_games - status_code: {response.status}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries})")
+        try:
+            async with limiter:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        return 200, await response.json()
+                    elif response.status == 404:
+                        logger.warning(f"fetch_user_games - User not found (404) for url: {url}")
+                        return 404, None # 유저를 찾을 수 없음
+                    
+                    retry_delay = delay + random.uniform(0, 1)
+                    logger.warning(f"fetch_user_games - status_code: {response.status}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries}) for url: {url}")
+        
+        except aiohttp.client_exceptions.ClientPayloadError as e:
+            retry_delay = delay + random.uniform(0, 1)
+            logger.warning(f"Fetch failed with ClientPayloadError for url {url}: {e}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries})")
 
         await asyncio.sleep(retry_delay)
 
     logger.error(f"fetch_user_games - Failed to fetch after {max_retries} attempts for url: {url}")
-    return None
+    return 500, None # 모든 재시도 실패
 
 async def get_user_games_by_uid_async(users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
     """
