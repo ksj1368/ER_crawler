@@ -1,16 +1,16 @@
 import asyncio
 import os
 from time import time
-from typing import List
+from typing import List, Dict, Any
 
 import pandas as pd
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
 
-from scripts.config import SEASON_ID, MATCHING_MODE, MAIN_VERSION, REGION_ID
-from scripts.crawler import get_top_ranker, get_match_ids_async, get_match_infos_async
-from scripts.db_utils import get_engine, check_match_exists, save_dataframes_to_db, user_table_update, get_all_user_ids
-from scripts.match_info_parsing import top_ranker_id, parse_match_data
+from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID
+from scripts.crawler import get_top_ranker, get_users_by_nickname_async, get_user_games_by_uid_async, get_match_infos_async
+from scripts.db_utils import get_engine, deactivate_user, get_active_users, upsert_users, update_user_last_match, save_dataframes_to_db, check_match_exists
+from scripts.match_info_parsing import top_ranker_nicknames, parse_match_data, parse_match_user_start
 from scripts.logger import logger
 
 async def test_pipeline(num_matches: int = 10, output_dir: str = "test_results"):
