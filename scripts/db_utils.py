@@ -76,23 +76,39 @@ def get_active_users(engine: Engine) -> List[Dict[str, Any]]:
         result = conn.execute(stmt)
         return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2]} for row in result]
 
+def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
+    """
+    여러 유저 정보를 Upsert합니다.
+    - DB에 없는 uid는 새로 추가합니다.
+    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신하고 is_active를 True로 설정합니다.
+    """
+    if not users_data:
+        return
+
+    stmt = text("""
+        INSERT INTO user (uid, nickname, last_match_id, is_active, last_updated_at)
+        VALUES (:uid, :nickname, 0, TRUE, :last_updated_at)
+        ON DUPLICATE KEY UPDATE
+        nickname = VALUES(nickname),
+        is_active = TRUE,
+        last_updated_at = VALUES(last_updated_at)
+    """)
+    
+    now = datetime.utcnow()
+    
+    params = [
+        {
+            'uid': user['uid'],
+            'nickname': user['nickname'],
+            'last_updated_at': now
+        }
+        for user in users_data
+    ]
     
     with engine.connect() as conn:
         with conn.begin():
-            insert_result = conn.execute(text(insert_sql))
-            if insert_result.rowcount > 0:
-                logger.info(f"Added {insert_result.rowcount} new users to 'user' table.")
-            else:
-                logger.info("No new users to add to 'user' table.")
-            
-            update_result = conn.execute(text(update_sql))
-            if update_result.rowcount > 0:
-                logger.info(f"Updated {update_result.rowcount} users in 'user' table.")
-            else:
-                logger.info("No users to update in 'user' table.")
-
-def get_all_user_ids(engine: Engine) -> list[int]:
-    """DB에 있는 모든 유저 ID를 조회하여 리스트로 반환합니다."""
+            conn.execute(stmt, params)
+    logger.info(f"Upserted {len(users_data)} users.")
     with engine.connect() as conn:
         stmt = text("SELECT user_id FROM user")
         result = conn.execute(stmt)
