@@ -100,12 +100,13 @@ def parse_match_team_info(data: dict) -> pd.DataFrame:
 
 def parse_match_user_start(data: dict) -> pd.DataFrame:
     """
-    게임 시작 전 유저 기본 정보 파싱
+    게임 시작 전 유저 정보와 게임 정보를 파싱
     """
     user_basic_list = [
         {
             "match_id": u["gameId"],
-            "user_id": u["userNum"],
+            "uid": u["uid"],
+            "nickname": u["nickname"],
             "character_num": u["characterNum"],
             "language": u.get("language", "None"),
             "team_number": u["teamNumber"],
@@ -117,7 +118,7 @@ def parse_match_user_start(data: dict) -> pd.DataFrame:
             "using_default_game_option": u.get("usingDefaultGameOption", True),
             "premade_matching_type": u.get("premadeMatchingType", 0),
             "tactical_skill_id": u.get("tacticalSkillGroup",0), 
-            "mlbot": u.get("mlbot", False)
+            "ml_bot": u.get("mlbot", False)
         } for u in data.get("userGames", [])
     ]
     return pd.DataFrame(user_basic_list)
@@ -129,7 +130,7 @@ def parse_match_user_end(data: dict) -> pd.DataFrame:
     user_basic_list = [
         {
             "match_id": u["gameId"],
-            "user_id": u["userNum"],
+            "uid": u["uid"],
             "victory": 1 if u.get("victory", False) else 0,
             "play_time": u["playTime"],
             "watch_time": u.get("watchTime", 0),
@@ -166,8 +167,7 @@ def parse_match_user_combat(data: dict) -> pd.DataFrame:
     user_combat_list = [
         {
             "match_id": u["gameId"],
-            "user_id": u["userNum"],
-            #"character_num": u["characterNum"],
+            "uid": u["uid"],
             "character_level": u["characterLevel"],
             "tactical_skill_level": u.get("tacticalSkillLevel",0),
             "player_kill": u.get("playerKill", 0),
@@ -200,11 +200,11 @@ def parse_match_user_trait(data: dict) -> pd.DataFrame:
     user_traits_list = []
     for u in data.get("userGames", []):
         match_id = u["gameId"]
-        user_id = u["userNum"]
+        uid = u["uid"]
         for trait_id in u.get("traitFirstSub", []):
-            user_traits_list.append({"match_id": match_id, "user_id": user_id, "trait_id": int(trait_id), "trait_type": "first_sub"})
+            user_traits_list.append({"match_id": match_id, "uid": uid, "trait_id": int(trait_id), "trait_type": "first_sub"})
         for trait_id in u.get("traitSecondSub", []):
-            user_traits_list.append({"match_id": match_id, "user_id": user_id, "trait_id": int(trait_id), "trait_type": "second_sub"})
+            user_traits_list.append({"match_id": match_id, "uid": uid, "trait_id": int(trait_id), "trait_type": "second_sub"})
     return pd.DataFrame(user_traits_list)
 
 def parse_match_user_damage(data: dict) -> pd.DataFrame:
@@ -214,7 +214,7 @@ def parse_match_user_damage(data: dict) -> pd.DataFrame:
     user_damage_list = [
         {
             "match_id": u["gameId"],
-            "user_id": u["userNum"],
+            "uid": u["uid"],
             "damage_to_player_total": u.get("damageToPlayer", 0),
             "damage_to_player_basic": u.get("damageToPlayer_basic", 0),
             "damage_to_player_skill": u.get("damageToPlayer_skill", 0),
@@ -282,7 +282,7 @@ def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
                 continue
             acq_type, src_cat = source_mapping.get(source, ("special", "unknown"))
             acquisition_list.append({
-                "match_id": u["gameId"], "user_id": u["userNum"], "acquisition_source": source,
+                "match_id": u["gameId"], "uid": u["uid"], "acquisition_source": source,
                 "acquisition_type": acq_type, "credit_amount": float(amount), "source_category": src_cat
             })
     return pd.DataFrame(acquisition_list)
@@ -355,7 +355,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
 
     for u in data.get("userGames", []):
         match_id = u["gameId"]
-        user_id = u["userNum"]
+        uid = u["uid"]
 
         # (할인 로직 및 키오스크/로봇 구분 로직은 이전과 동일)
         kiosk_prices = copy.deepcopy(console_item_mapping)
@@ -379,7 +379,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 if special_material_spent[cr_key] >= price > 0:
                     special_material_spent[cr_key] -= price
                     expenditure_list.append({
-                        "match_id": match_id, "user_id": user_id,
+                        "match_id": match_id, "uid": uid,
                         "expenditure_item": name, "expenditure_type": exp_type,
                         "credit_amount": int(price), "usage_count": 1
                     })
@@ -400,7 +400,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 price = robot_fixed_prices.get(item_code, original_price)
 
                 expenditure_list.append({
-                    "match_id": match_id, "user_id": user_id,
+                    "match_id": match_id, "uid": uid,
                     "expenditure_item": name, "expenditure_type": "robot_item",
                     "credit_amount": int(count * price), "usage_count": count
                 })
@@ -411,7 +411,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             amount = credit_source.get(source_key, 0)
             if amount > 0:
                  expenditure_list.append({
-                    "match_id": match_id, "user_id": user_id,
+                    "match_id": match_id, "uid": uid,
                     "expenditure_item": source_key, "expenditure_type": exp_type,
                     "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count
                 })
@@ -427,7 +427,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 count = drone_item_counts.pop(item_code, 0)
                 if count > 0:
                     expenditure_list.append({
-                        "match_id": match_id, "user_id": user_id,
+                        "match_id": match_id, "uid": uid,
                         "expenditure_item": name, "expenditure_type": exp_type,
                         "credit_amount": int(count * cost), "usage_count": count
                     })
@@ -440,7 +440,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 other_item_cr = 10
             if other_items_count > 0:
                 expenditure_list.append({
-                    "match_id": match_id, "user_id": user_id,
+                    "match_id": match_id, "uid": uid,
                     "expenditure_item": "etc", "expenditure_type": "remotedrone_item",
                     "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count
                 })
@@ -452,7 +452,7 @@ def parse_match_user_stats(data: dict) -> pd.DataFrame:
     """
     user_stats_list = [
         {
-            "match_id": u["gameId"], "user_id": u["userNum"],
+            "match_id": u["gameId"], "uid": u["uid"],
             "max_hp": u.get("maxHp", 0), "hp_regen": u.get("hpRegen", 0.0),
             "attack_power": u.get("attackPower", 0), "attack_speed": u.get("attackSpeed", 0.0),
             "defense": u.get("defense", 0), "skill_amp": u.get("skillAmp", 0),
@@ -478,7 +478,7 @@ def parse_match_user_equipment(data: dict) -> pd.DataFrame:
 
     user_equipment_list = [
         {
-            "match_id": u["gameId"], "user_id": u["userNum"],
+            "match_id": u["gameId"], "uid": u["uid"],
             "first_weapon": none_if_zero(u.get("equipFirstItemForLog", {}).get("0")),
             "first_chest": none_if_zero(u.get("equipFirstItemForLog", {}).get("1")),
             "first_head": none_if_zero(u.get("equipFirstItemForLog", {}).get("2")),
@@ -501,7 +501,7 @@ def parse_match_user_mmr(data: dict) -> pd.DataFrame:
     """
     user_mmr_list = [
         {
-            "match_id": u["gameId"], "user_id": u["userNum"],
+            "match_id": u["gameId"], "uid": u["uid"],
             "mmr_before": u.get("mmrBefore", 0), "mmr_after": u.get("mmrAfter", 0),
             "mmr_gain": u.get("mmrGain", 0), "mmr_gain_in_game": u.get("mmrGainInGame", 0),
             "mmr_loss_entry_cost": u.get("mmrLossEntryCost", 0), "rank_point": u.get("rankPoint", 0)
@@ -522,22 +522,22 @@ def parse_object(data: dict) -> pd.DataFrame:
     collect_log_metrics = {4: "collect_tree_of_life", 5: "collect_meteorite"}
 
     for u in data.get("userGames", []):
-        match_id, user_id = u["gameId"], u["userNum"]
+        match_id, uid = u["gameId"], u["uid"]
         for name, (key, mtype) in direct_metrics.items():
             if (value := u.get(key, 0)) > 0:
-                object_list.append({"match_id": match_id, "user_id": user_id, "metric_type": mtype, "metric_name": name, "value": value})
+                object_list.append({"match_id": match_id, "uid": uid, "metric_type": mtype, "metric_name": name, "value": value})
         for key, name in kill_monster_metrics.items():
             value = u.get("killMonsters", {}).get(key, 0)
             if name == "kill_wickline": value = 1 if value > 0 else 0
             if value > 0:
-                object_list.append({"match_id": match_id, "user_id": user_id, "metric_type": "kill_boss", "metric_name": name, "value": value})
+                object_list.append({"match_id": match_id, "uid": uid, "metric_type": "kill_boss", "metric_name": name, "value": value})
         collect_log = u.get("collectItemForLog", [])
         for idx, name in collect_log_metrics.items():
             if len(collect_log) > idx and (value := collect_log[idx]) > 0:
-                object_list.append({"match_id": match_id, "user_id": user_id, "metric_type": "collect_special", "metric_name": name, "value": value})
+                object_list.append({"match_id": match_id, "uid": uid, "metric_type": "collect_special", "metric_name": name, "value": value})
         for key, value in u.get("activeInstallation", {}).items():
             if value > 0:
-                object_list.append({"match_id": match_id, "user_id": user_id, "metric_type": "installation", "metric_name": int(key), "value": value})
+                object_list.append({"match_id": match_id, "uid": uid, "metric_type": "installation", "metric_name": int(key), "value": value})
     return pd.DataFrame(object_list)
 
 def parse_match_user_credit_time(data: dict) -> pd.DataFrame:
@@ -548,14 +548,14 @@ def parse_match_user_credit_time(data: dict) -> pd.DataFrame:
             used = u["usedVFCredits"][minute]
             gain = u["totalVFCredits"][minute]
             if used != 0 or gain != 0:
-                user_credit_time_list.append({"match_id": u["gameId"], "user_id": u["userNum"], "minute": minute, "used_credit": used, "gain_credit": gain})
+                user_credit_time_list.append({"match_id": u["gameId"], "uid": u["uid"], "minute": minute, "used_credit": used, "gain_credit": gain})
     return pd.DataFrame(user_credit_time_list)
 
 def parse_match_user_sight(data: dict) -> pd.DataFrame:
     """시야 정보 파싱"""
     user_sight_list = [
         {
-            "match_id": u["gameId"], "user_id": u["userNum"],
+            "match_id": u["gameId"], "uid": u["uid"],
             "sight_score": u["viewContribution"], "camera_setup": u["addTelephotoCamera"],
             "camera_remove": u["removeTelephotoCamera"], "emp_drone_setup": u["useEmpDrone"],
             "basic_drone_setup": u["useReconDrone"]
