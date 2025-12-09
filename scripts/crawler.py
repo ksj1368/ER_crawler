@@ -4,17 +4,24 @@ import aiohttp
 import random
 from dotenv import load_dotenv
 import requests
+import json
 from typing import List, Dict, Any, AsyncGenerator, Tuple
 from functools import lru_cache
 from tqdm import tqdm
 from aiolimiter import AsyncLimiter
 from scripts.logger import logger
+from scripts.config import URL_JSON_PATH
 
 # .env 파일에서 환경 변수 로드
 load_dotenv()
 
 API_KEY = os.getenv("API_KEY")
-BASE_URL = "https://open-api.bser.io"
+
+# URL 로드
+with open(URL_JSON_PATH) as f:
+    URLS = json.load(f)
+
+BASE_URL = URLS['base_url']
 
 HEADERS_WITH_KEY = {
     "accept": "application/json",
@@ -24,8 +31,8 @@ HEADERS_WITH_KEY = {
 # 정적 데이터 캐싱
 @lru_cache(maxsize=None)
 def get_character():
-    character_url = f'{BASE_URL}/v2/data/Character'
-    character_levelup_url = f'{BASE_URL}/v2/data/CharacterLevelUpStat'
+    character_url = f"{BASE_URL}{URLS['data']['character']}"
+    character_levelup_url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"
     response_c = requests.get(character_url, headers=HEADERS_WITH_KEY)
     response_cl = requests.get(character_levelup_url, headers=HEADERS_WITH_KEY)
     if response_c.status_code == 200 and response_cl.status_code == 200:
@@ -37,8 +44,8 @@ def get_character():
 
 @lru_cache(maxsize=None)
 def get_equipment():
-    url_armor = f'{BASE_URL}/v2/data/ItemArmor'
-    url_weapon = f'{BASE_URL}/v2/data/ItemWeapon'
+    url_armor = f"{BASE_URL}{URLS['data']['item_armor']}"
+    url_weapon = f"{BASE_URL}{URLS['data']['item_weapon']}"
     
     response_armor = requests.get(url_armor, headers=HEADERS_WITH_KEY)
     response_weapon = requests.get(url_weapon, headers=HEADERS_WITH_KEY)
@@ -51,12 +58,7 @@ def get_equipment():
     
 @lru_cache(maxsize=None)
 def get_trait() -> dict | None:
-    """_summary_
-
-    Returns:
-        dict | None: _description_
-    """
-    url = f'{BASE_URL}/v2/data/Trait'
+    url = f"{BASE_URL}{URLS['data']['trait']}"
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
@@ -67,12 +69,7 @@ def get_trait() -> dict | None:
     
 @lru_cache(maxsize=None)
 def get_monster() -> dict | None:
-    """_summary_
-
-    Returns:
-        dict | None: _description_
-    """
-    url = f'{BASE_URL}/v2/data/Monster'    
+    url = f"{BASE_URL}{URLS['data']['monster']}"    
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
@@ -83,12 +80,7 @@ def get_monster() -> dict | None:
     
 @lru_cache(maxsize=None)
 def get_area() -> dict | None:
-    """_summary_
-
-    Returns:
-        dict | None: _description_
-    """
-    url = f'{BASE_URL}/v2/data/Area'    
+    url = f"{BASE_URL}{URLS['data']['area']}"    
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
@@ -99,12 +91,7 @@ def get_area() -> dict | None:
         
 @lru_cache(maxsize=None)
 def get_char_lv() -> dict | None:
-    """_summary_
-
-    Returns:
-        dict | None: _description_
-    """
-    url = f'{BASE_URL}/v2/data/CharacterLevelUpStat'    
+    url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"    
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
@@ -115,13 +102,7 @@ def get_char_lv() -> dict | None:
 
 @lru_cache(maxsize=None)
 def get_l10n() -> str | None:
-    """_summary_
-
-    Returns:
-        str | None: _description_
-    """
-    url = 'https://open-api.bser.io/v1/l10n/Korean'
-    #url = 'https://d1wkxvul68bth9.cloudfront.net/l10n/l10n-Korean-20250417055750.txt'
+    url = f"{BASE_URL}{URLS['l10n']['korean']}"
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     if response.status_code == 200:
         response.encoding = response.apparent_encoding
@@ -267,7 +248,7 @@ async def get_match_ids_async(user_ids: List[int], main_version: int) -> List[in
 
 async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries: int = 3, delay: int = 1):
     """비동기적으로 단일 게임 정보를 가져옵니다."""
-    url = f"{BASE_URL}/v1/games/{match_id}"
+    url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
     for attempt in range(max_retries):
         async with limiter:
             async with session.get(url) as response:
@@ -300,7 +281,7 @@ def match_info(match_id: int) -> dict | None:
     """
     특정 게임 ID에 대한 상세 정보를 반환합니다.
     """
-    url = f"{BASE_URL}/v1/games/{match_id}"
+    url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
     response = requests.get(url, headers=HEADERS_WITH_KEY)
 
     if response.status_code == 200:
