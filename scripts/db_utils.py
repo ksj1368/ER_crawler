@@ -16,12 +16,6 @@ def get_engine() -> Engine:
     """SQLAlchemy 엔진 인스턴스를 반환합니다."""
     return engine
 
-def is_table_empty(conn: Connection, table_name: str) -> bool:
-    """Checks if a table is empty."""
-    query = text(f"SELECT 1 FROM {table_name} LIMIT 1;")
-    result = conn.execute(query)
-    return result.first() is None
-
 def check_match_exists(engine: Engine, match_ids: list[int]) -> set[int]:
     """DB에 이미 존재하는 매치 ID들을 한번에 조회하여 set으로 반환합니다."""
     if not match_ids:
