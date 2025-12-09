@@ -120,19 +120,55 @@ def get_l10n() -> str | None:
         logger.error(f"get_l10n - status_code: {response.status_code}")
         return None
 
-def get_top_ranker(season: int, region: int, matching_mode: int) -> dict | None:
-    """특정 시즌, 지역, 매칭 모드에서의 상위 랭커 정보를 반환
+def get_user_by_nickname(nickname: str) -> dict | None:
+    """닉네임으로 유저 정보를 조회합니다."""
+    url = f"{BASE_URL}{URLS['user']['nickname']}"
+    response = requests.get(url, headers=HEADERS_WITH_KEY, params={'query': nickname})
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("code") == 200 and "user" in data:
+            return data["user"]
+    logger.error(f"get_user_by_nickname for {nickname} - status_code: {response.status_code}, response: {response.text}")
+    return None
 
-    Args:
-        season (int): 게임 시즌(예: 31: 7시즌, 32: 7시즌 프리시즌)
-        region (int): 게임 서버 코드(10: asia(kr), 17: asia2(cn), 12: NorthAmerica)
-        matching_mode (int): 게임 모드(1: 솔로, 2: 듀오, 3: 스쿼드)
+async def fetch_user_by_nickname_async(session, nickname: str, limiter: AsyncLimiter) -> Dict[str, Any] | None:
+    """닉네임으로 유저 정보를 조회합니다.(비동기방식)"""
+    url = f"{BASE_URL}{URLS['user']['nickname']}"
+    async with limiter:
+        try:
+            async with session.get(url, params={'query': nickname}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    # API가 200을 반환했으나, 내부적으로 에러 코드(e.g., 404)를 포함할 수 있음
+                    if data.get("code") == 200 and "user" in data:
+                        user_obj = data["user"]
+                        if user_obj and 'userId' in user_obj:
+                            return user_obj
+                        else:
+                            logger.error(f"API returned a user object without a 'userId' for nickname '{nickname}': {user_obj}")
+                            return None
+                    else:
+                        # 200이지만, 내용이 에러인 경우 로깅
+                        logger.warning(f"API returned a non-200 internal code for nickname '{nickname}'. Status: {response.status}, Data: {data}")
+                        return None
+                else:
+                    # HTTP 상태 코드가 200이 아닌 경우 로깅
+                    logger.error(f"fetch_user_by_nickname_async for {nickname} - status: {response.status}, response: {await response.text()}")
+                    return None
+        except Exception as e:
+            # aiohttp, json 디코딩 등 모든 예외 처리
+            logger.error(f"An exception occurred in fetch_user_by_nickname_async for '{nickname}': {e}", exc_info=True)
+            return None
 
-    Returns:
-         dict | None: 
-        
-    """
-    url = f"{BASE_URL}/v1/rank/top/{season}/{matching_mode}/{region}"
+async def get_users_by_nickname_async(nicknames: List[str]) -> List[Dict[str, Any]]:
+    """비동기적으로 여러 닉네임에 대한 사용자 정보를 조회합니다."""
+    limiter = AsyncLimiter(50, 1)  # API 속도 제한
+    async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
+        tasks = [fetch_user_by_nickname_async(session, nickname, limiter) for nickname in nicknames]
+        results = await asyncio.gather(*tasks)
+        return [user for user in results if user]
+
     response = requests.get(url, headers=HEADERS_WITH_KEY)
     
     if response.status_code == 200:
@@ -168,83 +204,55 @@ async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries
     logger.error(f"fetch_user_games - Failed to fetch after {max_retries} attempts for url: {url}")
     return None
 
-async def get_match_ids_async(user_ids: List[int], main_version: int) -> List[int]:
-    """비동기적으로 여러 사용자의 게임 ID를 수집합니다.
-    aiolimiter를 사용하여 API 호출 빈도를 제어합니다.
+async def get_user_games_by_uid_async(users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    match_ids_set = set()
+    여러 사용자의 신규 게임 ID를 수집하고 생성합니다.(비동기방식)
+    - 404 에러 발생 시 해당 유저를 비활성화 대상으로 표시합니다.
+    - last_match_id 이후의 게임만 수집합니다.
+    """
     limiter = AsyncLimiter(50, 1)
-    failed_urls = []
 
-    async def process_user(session, user_id):
-        """한 명의 유저에 대한 모든 매치 기록을 페이지네이션하며 수집합니다."""
+    async def process_user(session, user) -> dict:
+        """한 명의 유저에 대한 모든 신규 매치 기록을 페이지네이션하며 수집합니다."""
+        uid = user['uid']
+        last_match_id = user['last_match_id']
+        new_match_ids = []
         next_page = None
+        
         while True:
-            url = f"{BASE_URL}/v1/user/games/{user_id}"
+            url = f"{BASE_URL}{URLS['user']['games'].format(uid=uid)}"
             if next_page:
                 url += f"?next={next_page}"
 
-            data = await fetch_user_games(session, url, limiter)
+            status, data = await fetch_user_games(session, url, limiter)
+
+            if status == 404:
+                return {'uid': uid, 'status': 'deactivated'}
             
-            if not data or "userGames" not in data:
-                failed_urls.append(url)
-                break
+            if status != 200 or not data or "userGames" not in data:
+                break 
 
             stop_crawling = False
             for game in data["userGames"]:
-                if game["versionMajor"] > main_version:
-                    continue
-                elif game["versionMajor"] == main_version:
-                    if game["matchingMode"] == 3:
-                        match_ids_set.add(game["gameId"])
-                else:
+                if game["gameId"] <= last_match_id:
                     stop_crawling = True
                     break
+                if game.get("matchingMode") == 3:
+                    new_match_ids.append(game["gameId"])
             
             if stop_crawling or not data.get('next'):
                 break
             
             next_page = data['next']
+        
+        return {'uid': uid, 'status': 'success', 'matches': new_match_ids}
 
     async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
-        tasks = [process_user(session, user_id) for user_id in user_ids]
-        for f in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Fetching user games"):
-            await f
+        tasks = [process_user(session, user) for user in users]
+        for future in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Fetching user games"):
+            user_result = await future
+            yield user_result
 
-        if failed_urls:
-            logger.info(f"Retrying {len(failed_urls)} failed URLs...")
-            
-            async def process_failed_url(session, url):
-                current_url = url
-                while current_url:
-                    data = await fetch_user_games(session, current_url, limiter)
-
-                    if not data or "userGames" not in data:
-                        logger.warning(f"Failed to fetch retried URL: {current_url}")
-                        break
-
-                    stop_crawling = False
-                    for game in data["userGames"]:
-                        if game["versionMajor"] > main_version:
-                            continue
-                        elif game["versionMajor"] == main_version:
-                            if game["matchingMode"] == 3:
-                                match_ids_set.add(game["gameId"])
-                        else:
-                            stop_crawling = True
-                            break
-                    
-                    if stop_crawling or not data.get('next'):
-                        break
-                    
-                    base_user_url = current_url.split('?')[0]
-                    current_url = f"{base_user_url}?next={data['next']}"
-
-            retry_tasks = [process_failed_url(session, url) for url in failed_urls]
-            for f in tqdm(asyncio.as_completed(retry_tasks), total=len(retry_tasks), desc="Retrying failed URLs"):
-                await f
-
-    return list(match_ids_set)
 
 async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries: int = 3, delay: int = 1):
     """비동기적으로 단일 게임 정보를 가져옵니다."""
