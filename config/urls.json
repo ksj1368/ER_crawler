@@ -1,0 +1,25 @@
+{
+  "base_url": "https://open-api.bser.io",
+  "data": {
+    "character": "/v2/data/Character",
+    "character_level_up_stat": "/v2/data/CharacterLevelUpStat",
+    "item_armor": "/v2/data/ItemArmor",
+    "item_weapon": "/v2/data/ItemWeapon",
+    "trait": "/v2/data/Trait",
+    "monster": "/v2/data/Monster",
+    "area": "/v2/data/Area"
+  },
+  "l10n": {
+    "korean": "/v1/l10n/Korean"
+  },
+  "rank": {
+    "top": "/v1/rank/top/{season_id}/{matching_mode}/{server_code}"
+  },
+  "user": {
+    "nickname": "/v1/user/nickname",
+    "games": "/v1/user/games/uid/{uid}"
+  },
+  "games": {
+    "details": "/v1/games/{match_id}"
+  }
+}
