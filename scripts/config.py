@@ -19,7 +19,7 @@ REGION_ID = int(os.getenv("region_id", 10))
 # Path Settings
 CODE_ROOT = Path(os.getenv("code_root"))
 LOG_PATH = CODE_ROOT / "logs"
-SCHEMA_PATH = CODE_ROOT / "db" / "schema_refactored.sql"
+SCHEMA_PATH = CODE_ROOT / "db" / "schema_season9.sql"
 URL_JSON_PATH = CODE_ROOT / "config" / "urls.json"
 
 # DB Settings
