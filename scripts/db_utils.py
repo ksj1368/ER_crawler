@@ -109,7 +109,26 @@ def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
         with conn.begin():
             conn.execute(stmt, params)
     logger.info(f"Upserted {len(users_data)} users.")
+def deactivate_user(engine: Engine, uid: str):
+    """특정 uid의 is_active를 False로 설정합니다."""
+    stmt = text("""
+        UPDATE user
+        SET is_active = FALSE, last_updated_at = :last_updated_at
+        WHERE uid = :uid
+    """)
     with engine.connect() as conn:
-        stmt = text("SELECT user_id FROM user")
-        result = conn.execute(stmt)
-        return [row[0] for row in result]
+        with conn.begin():
+            conn.execute(stmt, {'uid': uid, 'last_updated_at': datetime.utcnow()})
+    logger.warning(f"Deactivated user with uid: {uid}")
+
+def update_user_last_match(engine: Engine, uid: str, last_match_id: int):
+    """특정 유저의 마지막 매치 ID를 갱신합니다."""
+    stmt = text("""
+        UPDATE user
+        SET last_match_id = :last_match_id, last_updated_at = :last_updated_at
+        WHERE uid = :uid
+    """)
+    with engine.connect() as conn:
+        with conn.begin():
+            conn.execute(stmt, {'uid': uid, 'last_match_id': last_match_id, 'last_updated_at': datetime.utcnow()})
+    logger.info(f"Updated last_match_id for user {uid} to {last_match_id}")
