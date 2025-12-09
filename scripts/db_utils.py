@@ -68,22 +68,14 @@ def execute_sql_file(engine: Engine, file_path: str):
             for stmt in statements:
                 conn.execute(text(stmt))
     logger.info(f"Successfully executed SQL script: {file_path}")
-    
-def user_table_update(engine: Engine):
-    """match_user_start 테이블의 유저를 기준으로 user 테이블을 추가 및 업데이트합니다."""
-    insert_sql = """
-    INSERT INTO user (user_id, creation_date, update_date)
-    SELECT m.user_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    FROM (SELECT DISTINCT user_id FROM match_user_start) AS m
-    LEFT JOIN user u ON m.user_id = u.user_id
-    WHERE u.user_id IS NULL;
-    """
-    
-    update_sql = """
-    UPDATE user
-    SET update_date = CURRENT_TIMESTAMP
-    WHERE user_id IN (SELECT DISTINCT user_id FROM match_user_start);
-    """
+
+def get_active_users(engine: Engine) -> List[Dict[str, Any]]:
+    """is_active가 True인 모든 유저의 uid, nickname, last_match_id를 조회합니다."""
+    with engine.connect() as conn:
+        stmt = text("SELECT uid, nickname, last_match_id FROM user WHERE is_active = TRUE")
+        result = conn.execute(stmt)
+        return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2]} for row in result]
+
     
     with engine.connect() as conn:
         with conn.begin():
