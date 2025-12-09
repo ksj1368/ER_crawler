@@ -1,14 +1,9 @@
 /*
  * =================================================================================
- * 이터널 리턴 데이터 분석용 DB 스키마 (v2.0)
+ * 이터널 리턴 데이터 분석용 DB 스키마 (v2.1 Refactored)
  * ---------------------------------------------------------------------------------
- * 이전 피드백 및 요청사항 반영 내역:
- * 1. 테이블명 snake_case로 통일
- * 2. 메타 정보 테이블에 Surrogate Key(대리키, AUTO_INCREMENT PK) 도입하여 복합키 문제 해결
- * 3. 모든 외래 키(FK) 관계를 논리적으로 올바른 방향으로 재설정 및 ON DELETE CASCADE 추가
- * 4. 1NF 위반 컬럼(trait_*)을 별도 테이블(match_user_traits)로 정규화
- * 5. 파싱 코드 분석 기반으로 원본 JSON KEY를 컬럼 COMMENT에 명시
- * 6. 검색 성능 향상을 위한 보조 인덱스(INDEX) 추가
+ * 변경 내역:
+ * 1. `uid` 컬럼 타입을 TEXT에서 VARCHAR(32)로 변경하여 인덱싱 성능 및 저장 효율 개선.
  * =================================================================================
  */
 
@@ -17,11 +12,12 @@
 -- =================================================================================
 
 -- 수집이 끝나면 갱신
-CREATE TABLE user
-(
-  user_id       INT      PRIMARY KEY NOT NULL COMMENT 'userNum',
-  update_date   DATETIME    NOT NULL,
-  creation_date DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE user (
+    uid VARCHAR(128) NOT NULL PRIMARY KEY,
+    nickname VARCHAR(30),
+    last_match_id BIGINT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_updated_at DATETIME
 );
 
 CREATE TABLE area_info (
@@ -228,7 +224,8 @@ CREATE TABLE match_team_info (
 
 CREATE TABLE match_user_start (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL COMMENT '원본 JSON 키: userNum',
+  uid VARCHAR(128) NOT NULL NOT NULL COMMENT '원본 JSON 키: uid',
+  nickname VARCHAR(128) NOT NULL NOT NULL COMMENT '원본 JSON 키: nickname',
   character_num INT COMMENT '원본 JSON 키: characterNum',
   language VARCHAR(255) COMMENT '원본 JSON 키: language',
   team_number INT COMMENT '원본 JSON 키: teamNumber',
@@ -240,17 +237,17 @@ CREATE TABLE match_user_start (
   using_default_game_option BOOLEAN COMMENT '원본 JSON 키: usingDefaultGameOption',
   premade_matching_type INT COMMENT '원본 JSON 키: premadeMatchingType',
   tactical_skill_id INT COMMENT '원본 JSON 키: tacticalSkillGroup',
-  mlbot BOOLEAN COMMENT '원본 JSON 키: mlbot',
-  PRIMARY KEY (match_id, user_id),
+  ml_bot BOOLEAN COMMENT '원본 JSON 키: mlbot',
+  PRIMARY KEY (match_id, uid),
   FOREIGN KEY (match_id, team_number) REFERENCES match_team_info (match_id, team_number) ON DELETE CASCADE,
-  INDEX idx_user_id (user_id),
+  INDEX idx_uid (uid),
   INDEX idx_character_num (character_num),
   INDEX idx_tactical_skill_id (tactical_skill_id)
 ) COMMENT '매치 유저 정보 (중심 테이블)';
 
 CREATE TABLE match_user_end (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   victory BOOLEAN COMMENT '원본 JSON 키: victory',
   play_time INT COMMENT '원본 JSON 키: playTime',
   watch_time INT COMMENT '원본 JSON 키: watchTime',
@@ -276,13 +273,13 @@ CREATE TABLE match_user_end (
   give_up INT COMMENT '원본 JSON 키: giveUp',
   team_spectator INT COMMENT '원본 JSON 키: teamSpectator',
   is_leaving_before_credit_revival_terminate BOOLEAN COMMENT '원본 JSON 키: isLeavingBeforeCreditRevivalTerminate',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 기본 정보 (종료)';
 
 CREATE TABLE match_user_combat (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   character_level INT COMMENT '원본 JSON 키: characterLevel',
   tactical_skill_level INT COMMENT '원본 JSON 키: tacticalSkillLevel',
   player_kill INT COMMENT '원본 JSON 키: playerKill',
@@ -304,22 +301,22 @@ CREATE TABLE match_user_combat (
   credit_revived_others_count INT COMMENT '원본 JSON 키: creditRevivedOthersCount',
   reunited_count INT COMMENT '원본 JSON 키: reunitedCount',
   tactical_skill_count INT COMMENT '원본 JSON 키: tacticalSkillUseCount',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 전투 정보';
 
 CREATE TABLE match_user_trait (
     match_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
+    uid VARCHAR(128) NOT NULL NOT NULL,
     trait_id INT NOT NULL COMMENT 'traitFirstSub, traitSecondSub 배열의 요소',
     trait_type VARCHAR(20) NOT NULL COMMENT '"first_sub" 또는 "second_sub"',
-    FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE,
-    UNIQUE KEY uq_user_trait (match_id, user_id, trait_id)
+    FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE,
+    UNIQUE KEY uq_user_trait (match_id, uid, trait_id)
 ) COMMENT '매치 유저 특성 정보 (정규화된 테이블)';
 
 CREATE TABLE match_user_damage (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   damage_to_player_total INT COMMENT '원본 JSON 키: damageToPlayer',
   damage_to_player_basic INT COMMENT '원본 JSON 키: damageToPlayer_basic',
   damage_to_player_skill INT COMMENT '원본 JSON 키: damageToPlayer_skill',
@@ -349,13 +346,13 @@ CREATE TABLE match_user_damage (
   heal_amount INT COMMENT '원본 JSON 키: healAmount',
   team_recover INT COMMENT '원본 JSON 키: teamRecover',
   protect_absorb INT COMMENT '원본 JSON 키: protectAbsorb',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 데미지 정보';
 
 CREATE TABLE match_user_equipment (
     match_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL,
+    uid VARCHAR(128) NOT NULL NOT NULL,
     first_weapon INT COMMENT '원본 JSON 키: equipFirstItemForLog["0"]',
     first_chest INT COMMENT '원본 JSON 키: equipFirstItemForLog["1"]',
     first_head INT COMMENT '원본 JSON 키: equipFirstItemForLog["2"]',
@@ -368,13 +365,13 @@ CREATE TABLE match_user_equipment (
     last_leg INT COMMENT '원본 JSON 키: equipment["4"]',
     best_weapon INT COMMENT '원본 JSON 키: bestWeapon',
     best_weapon_level INT COMMENT '원본 JSON 키: bestWeaponLevel',
-    PRIMARY KEY (match_id, user_id),
-    FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+    PRIMARY KEY (match_id, uid),
+    FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 장비 정보';
 
 CREATE TABLE match_user_stats (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   max_hp INT COMMENT '원본 JSON 키: maxHp',
   hp_regen FLOAT COMMENT '원본 JSON 키: hpRegen',
   attack_power INT COMMENT '원본 JSON 키: attackPower',
@@ -394,33 +391,33 @@ CREATE TABLE match_user_stats (
   life_steal INT COMMENT '원본 JSON 키: lifeSteal',
   normal_life_steal INT COMMENT '원본 JSON 키: normalLifeSteal',
   skill_life_steal INT COMMENT '원본 JSON 키: skillLifeSteal',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 스탯 정보';
 
 CREATE TABLE match_user_mmr (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   mmr_before INT COMMENT '원본 JSON 키: mmrBefore',
   mmr_after INT COMMENT '원본 JSON 키: mmrAfter',
   mmr_gain INT COMMENT '원본 JSON 키: mmrGain',
   mmr_gain_in_game INT COMMENT '원본 JSON 키: mmrGainInGame',
   mmr_loss_entry_cost INT COMMENT '원본 JSON 키: mmrLossEntryCost',
   rank_point INT COMMENT '원본 JSON 키: rankPoint',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 MMR 정보';
 
 CREATE TABLE match_user_sight (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   sight_score INT COMMENT '원본 JSON 키: viewContribution',
   camera_setup INT COMMENT '원본 JSON 키: addTelephotoCamera',
   camera_remove INT COMMENT '원본 JSON 키: removeTelephotoCamera',
   emp_drone_setup INT COMMENT '원본 JSON 키: useEmpDrone',
   basic_drone_setup INT COMMENT '원본 JSON 키: useReconDrone',
-  PRIMARY KEY (match_id, user_id),
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  PRIMARY KEY (match_id, uid),
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 시야 정보';
 
 -- =================================================================================
@@ -429,41 +426,41 @@ CREATE TABLE match_user_sight (
 
 CREATE TABLE match_user_credit_acquisitions (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   acquisition_source VARCHAR(255) COMMENT '원본 JSON 키: creditSource의 key',
   acquisition_type VARCHAR(255) COMMENT '파싱 코드에서 매핑',
   credit_amount FLOAT COMMENT '원본 JSON 키: creditSource의 value',
   source_category VARCHAR(255) COMMENT '파싱 코드에서 매핑',
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE,
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE,
   INDEX idx_acquisition_source (acquisition_source)
 ) COMMENT '매치 유저 크레딧 획득 정보';
 
 CREATE TABLE match_user_credit_expenditures (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   expenditure_item VARCHAR(255) COMMENT '파싱 코드에서 매핑',
   expenditure_type VARCHAR(255) COMMENT '파싱 코드에서 매핑',
   credit_amount INT,
   usage_count INT,
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE
 ) COMMENT '매치 유저 크레딧 소모 정보';
 
 CREATE TABLE match_user_credit_time (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   minute INT COMMENT '0-19',
   used_credit INT COMMENT '원본 JSON 키: usedVFCredits[minute]',
   gain_credit INT COMMENT '원본 JSON 키: totalVFCredits[minute]',
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE,
-  UNIQUE KEY uq_user_minute (match_id, user_id, minute)
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE,
+  UNIQUE KEY uq_user_minute (match_id, uid, minute)
 ) COMMENT '매치 유저 분당 크레딧 정보';
 
 CREATE TABLE match_user_object (
   match_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL,
+  uid VARCHAR(128) NOT NULL NOT NULL,
   metric_type VARCHAR(255) COMMENT '파싱 코드에서 매핑',
   metric_name VARCHAR(255) COMMENT '파싱 코드에서 매핑',
   value INT,
-  FOREIGN KEY (match_id, user_id) REFERENCES match_user_start (match_id, user_id) ON DELETE CASCADE,
+  FOREIGN KEY (match_id, uid) REFERENCES match_user_start (match_id, uid) ON DELETE CASCADE,
   INDEX idx_metric_type_name (metric_type, metric_name)
 ) COMMENT '매치 유저 오브젝트/설치물 정보 (Long Format)';
