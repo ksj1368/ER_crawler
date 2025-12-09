@@ -4,18 +4,16 @@ import copy
 from collections import Counter
 import pandas as pd
 
-def top_ranker_id(data: dict) -> Tuple[List[int], List[str]]:
-    """topRanks 데이터에서 상위 랭커의 userNum과 nickname 리스트를 추출합니다.
+def top_ranker_nicknames(data: dict) -> List[str]:
+    """topRanks 데이터에서 상위 랭커의 nickname 리스트를 추출합니다.
 
     Args:
         data (dict): 'topRanks' 키를 포함한 랭킹 데이터 딕셔너리
 
     Returns:
-        Tuple[List[int], List[str]]: 상위 유저들의 userNum 리스트와 nickname 리스트
+        List[str]: 상위 유저들의 nickname 리스트
     """
-    top_1000_user_ids = [rank['userNum'] for rank in data.get('topRanks', [])]
-    top_1000_user_nicknames = [rank['nickname'] for rank in data.get('topRanks', [])]
-    return top_1000_user_ids, top_1000_user_nicknames
+    return [rank['nickname'] for rank in data.get('topRanks', [])]
 
 def parse_match_info(data: dict) -> pd.DataFrame:
     """
