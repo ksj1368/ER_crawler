@@ -261,7 +261,9 @@ async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries
         async with limiter:
             async with session.get(url) as response:
                 if response.status == 200:
-                    return match_id, await response.json()
+                    data = await response.json()
+                    if data.get("code") == 200:
+                        return match_id, data
                 
                 retry_delay = delay + random.uniform(0, 1)
                 logger.warning(f"fetch_match_info - match_id: {match_id}, status_code: {response.status}. Retrying in {retry_delay:.2f}s... (Attempt {attempt + 1}/{max_retries})")
@@ -283,7 +285,9 @@ async def get_match_infos_async(match_ids: List[int], batch_size: int = 100) -> 
             tasks = [fetch_match_info(session, match_id, limiter) for match_id in batch]
             for future in asyncio.as_completed(tasks):
                 match_id, data = await future
-                yield match_id, data
+                if data:
+                    yield match_id, data
+
 
 def match_info(match_id: int) -> dict | None:
     """
@@ -293,7 +297,8 @@ def match_info(match_id: int) -> dict | None:
     response = requests.get(url, headers=HEADERS_WITH_KEY)
 
     if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"match_info - status_code: {response.status_code}")
-        return None
+        data = response.json()
+        if data.get("code") == 200:
+            return data
+    logger.error(f"match_info - match_id: {match_id}, status_code: {response.status_code}, response: {response.text}")
+    return None
