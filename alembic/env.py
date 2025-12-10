@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from logging.config import fileConfig
 from alembic import context
 from scripts.config import DATABASE_URL
-from scripts.models import Base # Base는 모델의 메타데이터를 포함
+from scripts.models import Base # 모델의 메타데이터를 포함
 
 config = context.config
 
