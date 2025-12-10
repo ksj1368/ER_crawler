@@ -1,222 +1,217 @@
 import asyncio
-import os
 from time import time
-from typing import List
+from typing import List, Dict, Any
 
 import pandas as pd
 from dotenv import load_dotenv
 from tqdm.asyncio import tqdm
 
-from scripts.config import SEASON_ID, MATCHING_MODE, MAIN_VERSION, REGION_ID
-from scripts.crawler import get_top_ranker, get_match_ids_async, get_match_infos_async
-from scripts.db_utils import get_engine, check_match_exists, save_dataframes_to_db
-from scripts.match_info_parsing import top_ranker_id, parse_match_data
+from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID
+from scripts.crawler import get_top_ranker, get_users_by_nickname_async, get_user_games_by_uid_async, get_match_infos_async
+from scripts.db_utils import get_engine, deactivate_user, get_active_users, upsert_users, update_user_last_match, save_dataframes_to_db, check_match_exists
+from scripts.match_info_parsing import top_ranker_nicknames, parse_match_data, parse_match_user_start
 from scripts.logger import logger
 
-async def test_pipeline(num_matches: int = 10, output_dir: str = "test_results"):
+async def seed_top_rankers():
     """
-    테스트용 파이프라인: 지정된 수의 매치 데이터를 수집하여 파일로 저장합니다.
+    Top 1000 랭커를 가져와 DB에 시드 유저로 추가합니다.
+    - 랭커 목록에서 닉네임을 가져옵니다.
+    - 각 닉네임을 사용하여 uid를 조회합니다.
+    - 조회된 유저 정보를 DB에 Upsert합니다.
     """
-    logger.info(f"--- Starting Test Pipeline for {num_matches} matches ---")
+    logger.info("--- Starting to seed top rankers ---")
+    engine = get_engine()
     
-    # 1. 상위 랭커 유저 목록 가져오기 (테스트를 위해 일부 유저만 사용)
-    users_json = get_top_ranker(season=SEASON_ID, matching_mode=MATCHING_MODE, region=REGION_ID)
-    if not users_json:
-        logger.error("Failed to get top rankers for test. Exiting.")
+    # 1. 상위 랭커 닉네임 목록 가져오기
+    rankers_json = get_top_ranker(season_id=SEASON_ID, matching_mode=MATCHING_MODE, server_code=REGION_ID)
+    if not rankers_json:
+        logger.error("Failed to get top rankers. Exiting seeding.")
         return
-    user_ids, _ = top_ranker_id(users_json)
     
-    # 2. 매치 ID 수집(10명)
-    logger.info("Collecting match IDs for test...")
-    match_ids = await get_match_ids_async(user_ids[:10], MAIN_VERSION)
+    nicknames = top_ranker_nicknames(rankers_json)
+    nicknames = nicknames[:100]
+    logger.info(f"Found {len(nicknames)} top ranker nicknames.")
     
-    if not match_ids:
-        logger.warning("No matches found for test run.")
+    # 2. 닉네임으로 uid 비동기 조회
+    logger.info("Fetching uids for rankers concurrently...")
+    user_infos = await get_users_by_nickname_async(nicknames)
+    
+    # 3. DB에 시드 유저 추가/업데이트
+    if user_infos:
+        # get_users_by_nickname_async는 user 객체 리스트를 반환하므로, 필요한 형태로 변환
+        seed_users_data = [{'uid': user['userId'], 'nickname': user['nickname']} for user in user_infos]
+        upsert_users(engine, seed_users_data)
+        logger.info(f"Successfully upserted {len(seed_users_data)} seed users into the database.")
+    
+    logger.info("--- Seeding top rankers finished ---")
+
+
+async def run_pipeline():
+    """
+    데이터 수집 및 처리 파이프라인 실행 (스노우볼링 방식)
+    """
+    start_time = time()
+    logger.info("--- Starting data collection pipeline (Snowballing) ---")
+    engine = get_engine()
+
+    # 1. DB에서 활성 유저 목록 가져오기
+    active_users = get_active_users(engine)
+    # 테스트용으로 상위 100명만 처리
+    active_users = active_users[:10]  
+    if not active_users:
+        logger.warning("No active users found in the database. Consider seeding first. Exiting.")
+        return
+    
+    active_user_nicknames = {user['nickname'] for user in active_users}
+    logger.info(f"Found {len(active_users)} active users to process. (e.g., {list(active_user_nicknames)[:5]})")
+
+    # 2. 각 유저의 신규 게임 정보 비동기적으로 수집
+    user_game_generator = get_user_games_by_uid_async(active_users)
+    
+    all_new_match_ids = set()
+    user_match_map = {}
+
+    async for user_result in user_game_generator:
+        uid = user_result['uid']
+        
+        if user_result['status'] == 'deactivated':
+            deactivate_user(engine, uid)
+            continue
+        
+        if user_result['status'] != 'success' or not user_result.get('matches'):
+            continue
+
+        new_matches = user_result['matches']
+        user_match_map[uid] = new_matches
+        all_new_match_ids.update(new_matches)
+    
+    # 3. DB에 이미 있는 매치 ID 필터링
+    if not all_new_match_ids:
+        logger.info("No new matches found across all active users. Pipeline finished.")
+        return
+        
+    existing_match_ids = check_match_exists(engine, list(all_new_match_ids))
+    final_match_ids_to_process = list(all_new_match_ids - existing_match_ids)
+    # 테스트용으로 최대 50개만 처리
+    final_match_ids_to_process = final_match_ids_to_process[:50]  
+    if not final_match_ids_to_process:
+        logger.info("No new matches to process after filtering existing ones. Collection complete.")
         return
 
-    test_match_ids = match_ids[:num_matches]
-    logger.info(f"Processing {len(test_match_ids)} matches for test.")
+    logger.info(f"Found {len(final_match_ids_to_process)} new unique matches to process. (Sample Match ID: {final_match_ids_to_process[0]})")
 
-    # 3. 매치 데이터 가져오기 및 파싱
-    match_data_generator = get_match_infos_async(test_match_ids)
+    # 4. 새로운 매치 데이터 상세 정보 처리 및 저장 (Batching)
+    all_participant_nicknames = set()
+    raw_match_data_list = []
     
+    match_data_generator = get_match_infos_async(final_match_ids_to_process)
+    logger.info("Step 1: Aggregating all participant nicknames from new matches...")
+    async for match_id, raw_data in tqdm(match_data_generator, total=len(final_match_ids_to_process), desc="Fetching raw match data"):
+        if raw_data and 'userGames' in raw_data:
+            raw_match_data_list.append((match_id, raw_data))
+            for user in raw_data['userGames']:
+                all_participant_nicknames.add(user['nickname'])
+
+    # [수정] 모든 닉네임에 대해 한번만 API 호출
+    logger.info(f"Step 2: Fetching UID for {len(all_participant_nicknames)} unique participants...")
+    all_user_infos = await get_users_by_nickname_async(list(all_participant_nicknames))
+    nickname_to_uid_map = {user['nickname']: user['userId'] for user in all_user_infos}
+    logger.info(f"Resolved {len(nickname_to_uid_map)} nicknames to UIDs.")
+    
+    # [추적 로그] UID 조회 실패한 닉네임 확인
+    unresolved_nicknames = all_participant_nicknames - set(nickname_to_uid_map.keys())
+    if unresolved_nicknames:
+        logger.warning(f"Could not resolve UIDs for {len(unresolved_nicknames)} nicknames (e.g., {list(unresolved_nicknames)[:5]}). These are likely 'Not Found' (404) cases.")
+
+    # [수정] 수집된 raw data를 순회하며 파싱 진행
+    all_new_participants = []
     all_parsed_data = []
-    async for match_id, raw_data in tqdm(match_data_generator, total=len(test_match_ids), desc="Parsing test matches"):
-        if raw_data:
-            try:
+
+    logger.info("Step 3: Parsing all matches with resolved user IDs...")
+    for match_id, raw_data in tqdm(raw_match_data_list, desc="Processing and Saving Matches"):
+        try:
+            # 4-1. raw_data의 userGames에 'uid' 필드 추가
+            valid_user_games = []
+            for user_game in raw_data['userGames']:
+                nickname = user_game['nickname']
+                if nickname in nickname_to_uid_map:
+                    user_game['uid'] = nickname_to_uid_map[nickname]
+                    valid_user_games.append(user_game)
+
+            raw_data['userGames'] = valid_user_games
+            
+            # 4-2. 스노우볼링을 위한 새로운 참여자 정보 수집
+            for user_info in all_user_infos:
+                 if any(u['nickname'] == user_info['nickname'] for u in raw_data['userGames']):
+                    all_new_participants.append({'uid': user_info['userId'], 'nickname': user_info['nickname']})
+
+            # 4-3. 나머지 데이터 파싱
+            if raw_data['userGames']:
                 parsed_data = parse_match_data(raw_data)
                 all_parsed_data.append(parsed_data)
-            except Exception as e:
-                logger.error(f"Failed to parse match {match_id}: {e}", exc_info=True)
-
-    # 4. 결과 데이터프레임 병합 및 파일로 저장
-    if not all_parsed_data:
-        logger.info("No data was parsed.")
-        return
-
-    final_dfs = {}
-    for parsed_data in all_parsed_data:
-        for table_name, df in parsed_data.items():
-            if table_name not in final_dfs:
-                final_dfs[table_name] = []
-            final_dfs[table_name].append(df)
-
-    for table_name, dfs in final_dfs.items():
-        if dfs:
-            final_df = pd.concat(dfs, ignore_index=True)
-            os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, f"{table_name}.csv")
-            final_df.to_csv(output_path, index=False, encoding='utf-8-sig')
-            logger.info(f"Saved {len(final_df)} records to {output_path}")
-
-    logger.info(f"--- Test Pipeline Finished ---")
-    
-async def process_matches_in_batches(match_ids: List[int], batch_size: int):
-    """매치 데이터를 비동기적으로 가져와 배치 단위로 처리하고 DB에 저장합니다."""
-    engine = get_engine()
-    
-    total_matches_to_process = len(match_ids)
-    fetch_success_count = 0
-    parse_success_count = 0
-    db_saved_count = 0
-
-    match_info_generator = get_match_infos_async(match_ids)
-    
-    batch_to_save = []
-    
-    async for match_id, raw_data in tqdm(match_info_generator, total=total_matches_to_process, desc="Processing matches"):
-        if not raw_data:
-            continue
-        
-        fetch_success_count += 1
-        
-        try:
-            parsed_data = parse_match_data(raw_data)
-            batch_to_save.append(parsed_data)
-            parse_success_count += 1
+            
         except Exception as e:
-            logger.error(f"Failed to parse match {match_id}: {e}", exc_info=True)
-            continue
+            logger.error(f"Failed to process or save match {match_id}: {e}", exc_info=True)
 
-        if len(batch_to_save) >= batch_size:
-            combined_dfs = {}
-            for item in batch_to_save:
-                for table_name, df in item.items():
-                    if table_name not in combined_dfs:
-                        combined_dfs[table_name] = []
-                    combined_dfs[table_name].append(df)
-            
-            for table_name, dfs in combined_dfs.items():
-                if dfs:
-                    combined_dfs[table_name] = pd.concat(dfs, ignore_index=True)
-            
-            try:
-                # 저장 직전에 어떤 match_id들이 포함되어 있는지 확인
-                if 'match_info' in combined_dfs and not combined_dfs['match_info'].empty:
-                    batch_match_ids = combined_dfs['match_info']['match_id'].unique().tolist()
-                    logger.info(f"Attempting to save batch with match_ids: {batch_match_ids}")
-
-                save_dataframes_to_db(engine, combined_dfs)
-                db_saved_count += len(batch_to_save)
-            except Exception as e:
-                logger.error(f"Failed to save batch to DB: {e}", exc_info=True)
-                
-                # 오류 발생 시, 어떤 데이터가 문제 탐색
-                logger.error("--- STARTING INTEGRITY DEBUG ---")
-                parent_df = combined_dfs.get('match_user_start')
-                child_df = combined_dfs.get('match_user_end')
-
-                if parent_df is not None and child_df is not None:
-                    # 부모와 자식 테이블의 키를 set으로 생성
-                    parent_keys = set(tuple(x) for x in parent_df[['match_id', 'user_id']].to_numpy())
-                    child_keys = set(tuple(x) for x in child_df[['match_id', 'user_id']].to_numpy())                    
-                    orphan_keys = child_keys - parent_keys
-                    
-                    if orphan_keys:
-                        logger.error(f"Found {len(orphan_keys)} orphan rows in 'match_user_end'.")
-                        for i, key in enumerate(list(orphan_keys)[:5]):
-                            logger.error(f"  Orphan Key {i+1}: match_id={key[0]}, user_id={key[1]}")
-                    else:
-                        logger.error("No orphan keys found, there might be another issue.")
-                logger.error("--- ENDING INTEGRITY DEBUG ---")
-            
-            batch_to_save = []
-
-    # 마지막 남은 배치 처리
-    if batch_to_save:
-        combined_dfs = {}
-        for item in batch_to_save:
-            for table_name, df in item.items():
-                if table_name not in combined_dfs:
-                    combined_dfs[table_name] = []
-                combined_dfs[table_name].append(df)
+    # 5. 수집된 데이터 일괄 저장
+    # 5-1. 스노우볼링으로 수집된 신규 유저 일괄 upsert
+    if all_new_participants:
+        unique_participants = list({p['uid']: p for p in all_new_participants}.values())
         
-        for table_name, dfs in combined_dfs.items():
-            if dfs:
-                combined_dfs[table_name] = pd.concat(dfs, ignore_index=True)
+        # [추적 로그] 진짜 새로운 유저 확인
+        truly_new_users = [p for p in unique_participants if p['nickname'] not in active_user_nicknames]
+        if truly_new_users:
+            logger.info(f"[DIAGNOSIS] Found {len(truly_new_users)} new users to be added. (Sample: {truly_new_users[0]['nickname']})")
         
-        try:
-            save_dataframes_to_db(engine, combined_dfs)
-            db_saved_count += len(batch_to_save)
-        except Exception as e:
-            logger.error(f"Failed to save final batch to DB: {e}", exc_info=True)
+        logger.info(f"Step 4: Upserting {len(unique_participants)} participants into the database...")
+        upsert_users(engine, unique_participants)
+        logger.info("Upsert complete.")
 
-    return {
-        "total": total_matches_to_process,
-        "fetch_success": fetch_success_count,
-        "parse_success": parse_success_count,
-        "db_saved": db_saved_count
-    }
 
-def run_pipeline():
-    """전체 데이터 수집 및 처리 파이프라인 실행"""
-    load_dotenv()
-    start_time = time()
-    
-    logger.info("Starting data collection pipeline.")
-    engine = get_engine()
+    # 5-2. 파싱된 매치 데이터 일괄 저장
+    if all_parsed_data:
+        logger.info(f"Step 5: Saving data from {len(all_parsed_data)} matches to database...")
+        combined_data = {}
+        for parsed_data in all_parsed_data:
+            for table_name, df in parsed_data.items():
+                if table_name not in combined_data:
+                    combined_data[table_name] = []
+                combined_data[table_name].append(df)
+        
+        for table_name, df_list in combined_data.items():
+            if df_list:
+                combined_data[table_name] = pd.concat(df_list, ignore_index=True)
 
-    # 1. 상위 랭커 유저 목록 가져오기
-    users_json = get_top_ranker(season=SEASON_ID, matching_mode=MATCHING_MODE, region=REGION_ID)
-    if not users_json:
-        logger.error("Failed to get top rankers. Exiting.")
-        return
-    user_ids, _ = top_ranker_id(users_json)
-    
-    # 2. API로부터 모든 매치 ID 수집
-    logger.info(f"Collecting all match IDs for {len(user_ids)} users...")
-    all_match_ids = asyncio.run(get_match_ids_async(user_ids, MAIN_VERSION))
-    
-    # 3. DB에 이미 존재하는 매치 ID 확인
-    logger.info(f"Checking for existing matches in the database...")
-    existing_match_ids = check_match_exists(engine, all_match_ids)
-    new_match_ids = list(set(all_match_ids) - existing_match_ids)
-    logger.info(f"Found {len(new_match_ids)} new match IDs to process.")
+        save_dataframes_to_db(engine, combined_data)
+        logger.info("Saving match data complete.")
 
-    if not new_match_ids:
-        logger.info("No new matches to process. Collection complete.")
-        return
 
-    # 4. 새로운 매치 데이터 처리 및 저장
-    stats = asyncio.run(process_matches_in_batches(new_match_ids, batch_size=100))
-    
+    # 6. 각 유저의 last_match_id 갱신
+    logger.info("Step 6: Updating last_match_id for processed users...")
+    for uid, matches in user_match_map.items():
+        if matches:
+            latest_match_id = max(matches)
+            update_user_last_match(engine, uid, latest_match_id)
+    logger.info("Update complete.")
+
     elapsed_time = time() - start_time
-    logger.info(f"Total data collection completed in {elapsed_time:.2f} seconds")
-    
-    total_matches = stats['total']
-    fetch_success = stats['fetch_success']
-    fetch_failed = total_matches - fetch_success
-    parse_success = stats['parse_success']
-    parse_failed = fetch_success - parse_success
-    db_saved = stats['db_saved']
-    db_failed = parse_success - db_saved
+    logger.info(f"--- Data collection pipeline finished in {elapsed_time:.2f} seconds ---")
 
-    logger.info("--- Crawling Summary ---")
-    logger.info(f"Total new matches to process: {total_matches}")
-    logger.info(f"API Fetch: {fetch_success} succeeded, {fetch_failed} failed.")
-    logger.info(f"Data Parsing: {parse_success} succeeded, {parse_failed} failed.")
-    logger.info(f"Database Save: {db_saved} processed, {db_failed} failed.")
-    logger.info("------------------------")
+
+async def main():
+    """command에 알맞는 파이프라인 함수를 실행합니다."""
+    import sys
+    if len(sys.argv) > 1:
+        command = sys.argv[1]
+        if command == 'seed':
+            await seed_top_rankers()
+        elif command == 'run':
+            await run_pipeline()
+        else:
+            print(f"Unknown command: {command}. Use 'seed' or 'run'.")
+    else:
+        print("Please provide a command: 'seed' or 'run'.")
+
 
 if __name__ == '__main__':
-    run_pipeline()
+    asyncio.run(main())

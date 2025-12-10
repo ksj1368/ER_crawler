@@ -11,7 +11,7 @@ load_dotenv(dotenv_path=env_path)
 API_KEY = os.getenv("API_KEY")
 
 # Version Settings
-SEASON_ID = int(os.getenv("season_id", 33))
+SEASON_ID = int(os.getenv("season_id", 35))
 MATCHING_MODE = int(os.getenv("matching_mode", 3))
 MAIN_VERSION = int(os.getenv("main_version", 7)) # 7
 REGION_ID = int(os.getenv("region_id", 10))
@@ -19,7 +19,8 @@ REGION_ID = int(os.getenv("region_id", 10))
 # Path Settings
 CODE_ROOT = Path(os.getenv("code_root"))
 LOG_PATH = CODE_ROOT / "logs"
-SCHEMA_PATH = CODE_ROOT / "db" / "schema_season9.sql" # schema.sql -> schema_season9.sql로 수정
+SCHEMA_PATH = CODE_ROOT / "db" / "schema_season9.sql"
+URL_JSON_PATH = CODE_ROOT / "config" / "urls.json"
 
 # DB Settings
 DB_HOST = os.getenv("DB_HOST", "localhost")

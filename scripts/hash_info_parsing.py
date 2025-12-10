@@ -130,12 +130,10 @@ def parse_character_info(data: Dict[str, Any], season: int = 8, major_version: i
             'archetype_secondary': char.get('charArcheType2') or None,  # None이면 NULL로 저장
             'weapon_range_type': char.get('weaponRangeType', 'Unknown'),
             'base_max_hp': int(char.get('maxHp', 0)),
-            #'base_max_sp': int(char.get('maxSp', 0)),
             'base_attack_power': int(char.get('attackPower', 0)),
             'base_defense': int(char.get('defense', 0)),
             'base_skill_amp': int(char.get('skillAmp', 0)),
             'base_hp_regen': float(char.get('hpRegen', 0.0)),
-            #'base_sp_regen': float(char.get('spRegen', 0.0)),
             'base_attack_speed': float(char.get('attackSpeed', 0.0)),
             'base_move_speed': float(char.get('moveSpeed', 0.0)),
             'base_sight_range': float(char.get('sightRange', 0.0))
@@ -161,11 +159,9 @@ def parse_character_levelup_stats(data: Dict[str, Any]) -> pd.DataFrame:
         levelup_info = {
             'character_id': char['code'],
             'levelup_max_hp': float(char.get('maxHp', 0.0)),
-            #'levelup_max_sp': float(char.get('maxSp', 0.0)),
             'levelup_attack_power': float(char.get('attackPower', 0.0)),
             'levelup_defense': float(char.get('defense', 0.0)),
             'levelup_hp_regen': float(char.get('hpRegen', 0.0)),
-            #'levelup_sp_regen': float(char.get('spRegen', 0.0))
         }
         levelup_list.append(levelup_info)
     
@@ -200,7 +196,6 @@ def parse_item_weapon(data: Dict[str, Any], season: int = 8, major_version: int 
             'defense': int(weapon.get('defense', 0)),
             'skill_amp': int(weapon.get('skillAmp', 0)),
             'max_hp': int(weapon.get('maxHp', 0)),
-            #'max_sp': int(weapon.get('maxSP', 0)),  # 주의: JSON에서는 maxSP
             'attack_speed_ratio': int(weapon.get('attackSpeedRatio', 0)),
             'critical_strike_chance': int(weapon.get('criticalStrikeChance', 0)),
             'critical_strike_damage': int(weapon.get('criticalStrikeDamage', 0)),
