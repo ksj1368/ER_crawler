@@ -19,6 +19,7 @@ pandas = "^2.3.3"
 sqlalchemy = "^2.0.0"
 aiolimiter = "^1.2.1"
 sqlparse = "^0.5.4"
+alembic = "^1.17.2"
 
 
 [tool.poetry.group.dev.dependencies]
