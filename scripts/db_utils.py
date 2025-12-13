@@ -1,11 +1,13 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, Connection
+from sqlalchemy.dialects.mysql import insert
 import pandas as pd
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
 
 from scripts.config import DATABASE_URL
+from scripts.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -79,30 +81,33 @@ def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     if not users_data:
         return
 
-    stmt = text("""
-        INSERT INTO user (uid, nickname, last_match_id, is_active, last_updated_at)
-        VALUES (:uid, :nickname, 0, TRUE, :last_updated_at)
-        ON DUPLICATE KEY UPDATE
-        nickname = VALUES(nickname),
-        is_active = TRUE,
-        last_updated_at = VALUES(last_updated_at)
-    """)
-    
     now = datetime.utcnow()
     
-    params = [
+    # Prepare list of dictionaries for bulk insert
+    values_list = [
         {
             'uid': user['uid'],
             'nickname': user['nickname'],
+            'last_match_id': 0, # Default for new users
+            'is_active': True,
             'last_updated_at': now
         }
         for user in users_data
     ]
+
+    insert_stmt = insert(User).values(values_list)
+
+    on_duplicate_key_stmt = insert_stmt.on_duplicate_key_update(
+        nickname=insert_stmt.inserted.nickname,
+        is_active=True,
+        last_updated_at=insert_stmt.inserted.last_updated_at
+    )
     
     with engine.connect() as conn:
         with conn.begin():
-            conn.execute(stmt, params)
+            conn.execute(on_duplicate_key_stmt)
     logger.info(f"Upserted {len(users_data)} users.")
+
 def deactivate_user(engine: Engine, uid: str):
     """특정 uid의 is_active를 False로 설정합니다."""
     stmt = text("""
