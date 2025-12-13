@@ -13,6 +13,7 @@ MySQL 스키마에 맞는 형태로 변환하는 모듈
 - Monster.json: 몬스터 정보
 
 """
+import aiohttp
 from typing import Dict, List, Any, Optional
 import json
 from pathlib import Path
@@ -296,7 +297,8 @@ def parse_monster_info(data: Dict[str, Any], season: int = 8, major_version: int
     return df
 
 
-def parse_all_meta_files(
+async def parse_all_meta_files(
+    session: aiohttp.ClientSession,
     l10n_data: List[str],  # l10n 데이터를 인자로 추가
     season: int = 8, 
     major_version: int = 1, 
@@ -306,13 +308,14 @@ def parse_all_meta_files(
     모든 메타 정보 JSON 파일을 파싱하여 테이블별 레코드를 반환
     """
     results = {}
-    a, w = get_equipment()
-    results['character_info'] = parse_character_info(get_character()[0], season, major_version, minor_version)
-    results['character_levelup_stats'] = parse_character_levelup_stats(get_char_lv())  
+    a, w = await get_equipment(session)
+    char_data = await get_character(session)
+    results['character_info'] = parse_character_info(char_data[0], season, major_version, minor_version)
+    results['character_levelup_stats'] = parse_character_levelup_stats(await get_char_lv(session))  
     results['item_weapon'] = parse_item_weapon(w, season, major_version, minor_version)  
     results['item_armor'] = parse_item_armor(a, season, major_version, minor_version)  
-    results['monster_info'] = parse_monster_info(get_monster(), season, major_version, minor_version)  
-    results['area_info'] = parse_area_info(get_area(), season, major_version, minor_version)
+    results['monster_info'] = parse_monster_info(await get_monster(session), season, major_version, minor_version)  
+    results['area_info'] = parse_area_info(await get_area(session), season, major_version, minor_version)
 
     # --- [추가된 코드] l10n 데이터 처리 ---
     # parse_from_l10n 함수를 사용하여 weather, installation, trait 정보 파싱
