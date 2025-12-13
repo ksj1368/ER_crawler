@@ -3,10 +3,8 @@ import asyncio
 import aiohttp
 import random
 from dotenv import load_dotenv
-import requests
 import json
 from typing import List, Dict, Any, AsyncGenerator, Tuple
-from functools import lru_cache
 from tqdm import tqdm
 from aiolimiter import AsyncLimiter
 from scripts.logger import logger
@@ -28,109 +26,95 @@ HEADERS_WITH_KEY = {
     "x-api-key": API_KEY
 }
 
-# 정적 데이터 캐싱
-@lru_cache(maxsize=None)
-def get_character():
-    character_url = f"{BASE_URL}{URLS['data']['character']}"
-    character_levelup_url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"
-    response_c = requests.get(character_url, headers=HEADERS_WITH_KEY)
-    response_cl = requests.get(character_levelup_url, headers=HEADERS_WITH_KEY)
-    if response_c.status_code == 200 and response_cl.status_code == 200:
-        return response_c.json(), response_cl.json()
-    else:
-        logger.error(f"get_character - status_code: {response_c.status_code}")
-        logger.error(f"get_character - status_code: {response_cl.status_code}")
+async def fetch_json(session: aiohttp.ClientSession, url: str) -> Any | None:
+    """JSON 데이터를 가져옵니다."""
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                return await response.json()
+            else:
+                logger.error(f"fetch_json - url: {url}, status_code: {response.status}")
+                return None
+    except Exception as e:
+        logger.error(f"fetch_json error - url: {url}, error: {e}")
         return None
 
-@lru_cache(maxsize=None)
-def get_equipment():
+async def get_character(session: aiohttp.ClientSession):
+    character_url = f"{BASE_URL}{URLS['data']['character']}"
+    character_levelup_url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"
+    
+    data_c = await fetch_json(session, character_url)
+    data_cl = await fetch_json(session, character_levelup_url)
+    
+    if data_c and data_cl:
+        return data_c, data_cl
+    return None
+
+async def get_equipment(session: aiohttp.ClientSession):
     url_armor = f"{BASE_URL}{URLS['data']['item_armor']}"
     url_weapon = f"{BASE_URL}{URLS['data']['item_weapon']}"
     
-    response_armor = requests.get(url_armor, headers=HEADERS_WITH_KEY)
-    response_weapon = requests.get(url_weapon, headers=HEADERS_WITH_KEY)
-    if response_armor.status_code == 200 and response_weapon.status_code == 200:
-        return response_armor.json(), response_weapon.json()
-    else:
-        logger.error(f"get_equipment armor - status_code: {response_armor.status_code}")
-        logger.error(f"get_equipment weapon - status_code: {response_weapon.status_code}")
-        return None
+    data_armor = await fetch_json(session, url_armor)
+    data_weapon = await fetch_json(session, url_weapon)
     
-@lru_cache(maxsize=None)
-def get_trait() -> dict | None:
+    if data_armor and data_weapon:
+        return data_armor, data_weapon
+    return None
+    
+async def get_trait(session: aiohttp.ClientSession) -> dict | None:
     url = f"{BASE_URL}{URLS['data']['trait']}"
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
+    return await fetch_json(session, url)
     
-    if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"get_trait - status_code: {response.status_code}")
-        return None
-    
-@lru_cache(maxsize=None)
-def get_monster() -> dict | None:
+async def get_monster(session: aiohttp.ClientSession) -> dict | None:
     url = f"{BASE_URL}{URLS['data']['monster']}"    
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
+    return await fetch_json(session, url)
     
-    if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"get_monster - status_code: {response.status_code}")
-        return None
-    
-@lru_cache(maxsize=None)
-def get_area() -> dict | None:
+async def get_area(session: aiohttp.ClientSession) -> dict | None:
     url = f"{BASE_URL}{URLS['data']['area']}"    
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"get_area - status_code: {response.status_code}")
-        return None
+    return await fetch_json(session, url)
         
-@lru_cache(maxsize=None)
-def get_char_lv() -> dict | None:
+async def get_char_lv(session: aiohttp.ClientSession) -> dict | None:
     url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"    
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        logger.error(f"get_char_lv - status_code: {response.status_code}")
-        return None
+    return await fetch_json(session, url)
 
-@lru_cache(maxsize=None)
-def get_l10n() -> str | None:
+async def get_l10n(session: aiohttp.ClientSession) -> List[str] | None:
     url = f"{BASE_URL}{URLS['l10n']['korean']}"
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
-    if response.status_code == 200:
-        response.encoding = response.apparent_encoding
-        l10n = response.json()
-        l10n_url = l10n['data']["l10Path"]
-        
-        response = requests.get(l10n_url, headers=HEADERS_WITH_KEY)
-        if response.status_code == 200:
-            response.encoding = response.apparent_encoding
-            l10n = response.text.splitlines()
-            return l10n
-        else:
-            logger.error((f"get ln10n text file - status_code: {response.status_code}"))
-    else:
-        logger.error(f"get_l10n - status_code: {response.status_code}")
-        return None
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                l10n = await response.json()
+                l10n_url = l10n['data']["l10Path"]
+                
+                async with session.get(l10n_url) as file_response:
+                    if file_response.status == 200:
+                        text_content = await file_response.text()
+                        return text_content.splitlines()
+                    else:
+                         logger.error(f"get ln10n text file - status_code: {file_response.status}")
+            else:
+                logger.error(f"get_l10n - status_code: {response.status}")
+    except Exception as e:
+        logger.error(f"get_l10n error: {e}")
+    return None
 
-def get_user_by_nickname(nickname: str) -> dict | None:
+async def get_user_by_nickname(session: aiohttp.ClientSession, nickname: str) -> dict | None:
     """닉네임으로 유저 정보를 조회합니다."""
     url = f"{BASE_URL}{URLS['user']['nickname']}"
-    response = requests.get(url, headers=HEADERS_WITH_KEY, params={'query': nickname})
-    
-    if response.status_code == 200:
-        data = response.json()
-        if data.get("code") == 200 and "user" in data:
-            return data["user"]
-    logger.error(f"get_user_by_nickname for {nickname} - status_code: {response.status_code}, response: {response.text}")
+    try:
+        async with session.get(url, params={'query': nickname}) as response:
+            if response.status == 200:
+                data = await response.json()
+                if data.get("code") == 200 and "user" in data:
+                    return data["user"]
+            logger.error(f"get_user_by_nickname for {nickname} - status_code: {response.status}")
+    except Exception as e:
+        logger.error(f"get_user_by_nickname error: {e}")
     return None
+
+async def get_top_ranker(session: aiohttp.ClientSession, season_id: int, matching_mode: int, server_code: int) -> dict | None:
+    """상위 랭커 정보를 반환합니다."""
+    url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
+    return await fetch_json(session, url)
 
 async def fetch_user_by_nickname_async(session, nickname: str, limiter: AsyncLimiter) -> Dict[str, Any] | None:
     """닉네임으로 유저 정보를 조회합니다.(비동기방식)"""
@@ -140,7 +124,6 @@ async def fetch_user_by_nickname_async(session, nickname: str, limiter: AsyncLim
             async with session.get(url, params={'query': nickname}) as response:
                 if response.status == 200:
                     data = await response.json()
-                    # API가 200을 반환했으나, 내부적으로 에러 코드(e.g., 404)를 포함할 수 있음
                     if data.get("code") == 200 and "user" in data:
                         user_obj = data["user"]
                         if user_obj and 'userId' in user_obj:
@@ -149,15 +132,12 @@ async def fetch_user_by_nickname_async(session, nickname: str, limiter: AsyncLim
                             logger.error(f"API returned a user object without a 'userId' for nickname '{nickname}': {user_obj}")
                             return None
                     else:
-                        # 200이지만, 내용이 에러인 경우 로깅
                         logger.warning(f"API returned a non-200 internal code for nickname '{nickname}'. Status: {response.status}, Data: {data}")
                         return None
                 else:
-                    # HTTP 상태 코드가 200이 아닌 경우 로깅
                     logger.error(f"fetch_user_by_nickname_async for {nickname} - status: {response.status}, response: {await response.text()}")
                     return None
         except Exception as e:
-            # aiohttp, json 디코딩 등 모든 예외 처리
             logger.error(f"An exception occurred in fetch_user_by_nickname_async for '{nickname}': {e}", exc_info=True)
             return None
 
@@ -168,20 +148,6 @@ async def get_users_by_nickname_async(nicknames: List[str]) -> List[Dict[str, An
         tasks = [fetch_user_by_nickname_async(session, nickname, limiter) for nickname in nicknames]
         results = await asyncio.gather(*tasks)
         return [user for user in results if user]
-
-
-def get_top_ranker(season_id: int, matching_mode: int, server_code: int) -> dict | None:
-    """상위 랭커 정보를 반환합니다."""
-    url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
-    
-    if response.status_code == 200:
-        data = response.json()
-        if data.get("code") == 200:
-            return data
-    logger.error(f"get_top_ranker - status_code: {response.status_code}, response: {response.text}")
-    return None
-
 
 async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries: int = 5, delay: int = 1) -> Tuple[int, dict]:
     """유저의 match 정보를 가져옵니다.(비동기방식)"""
@@ -210,13 +176,10 @@ async def fetch_user_games(session, url: str, limiter: AsyncLimiter, max_retries
 async def get_user_games_by_uid_async(users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
     """
     여러 사용자의 신규 게임 ID를 수집하고 생성합니다.(비동기방식)
-    - 404 에러 발생 시 해당 유저를 비활성화 대상으로 표시합니다.
-    - last_match_id 이후의 게임만 수집합니다.
     """
     limiter = AsyncLimiter(50, 1)
 
     async def process_user(session, user) -> dict:
-        """한 명의 유저에 대한 모든 신규 매치 기록을 페이지네이션하며 수집합니다."""
         uid = user['uid']
         last_match_id = user['last_match_id']
         new_match_ids = []
@@ -256,7 +219,6 @@ async def get_user_games_by_uid_async(users: List[Dict[str, Any]]) -> AsyncGener
             user_result = await future
             yield user_result
 
-
 async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries: int = 3, delay: int = 1):
     """비동기적으로 단일 게임 정보를 가져옵니다."""
     url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
@@ -279,7 +241,6 @@ async def fetch_match_info(session, match_id, limiter: AsyncLimiter, max_retries
 async def get_match_infos_async(match_ids: List[int], batch_size: int = 100) -> AsyncGenerator[Tuple[int, Any], None]:
     """
     비동기적으로 여러 게임의 정보를 수집하고 yield합니다.
-    aiolimiter를 사용하여 API 호출 빈도를 제어합니다.
     """
     limiter = AsyncLimiter(50, 1)
     async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
@@ -291,17 +252,9 @@ async def get_match_infos_async(match_ids: List[int], batch_size: int = 100) -> 
                 if data:
                     yield match_id, data
 
-
-def match_info(match_id: int) -> dict | None:
+async def match_info(session: aiohttp.ClientSession, match_id: int) -> dict | None:
     """
     특정 게임 ID에 대한 상세 정보를 반환합니다.
     """
     url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
-    response = requests.get(url, headers=HEADERS_WITH_KEY)
-
-    if response.status_code == 200:
-        data = response.json()
-        if data.get("code") == 200:
-            return data
-    logger.error(f"match_info - match_id: {match_id}, status_code: {response.status_code}, response: {response.text}")
-    return None
+    return await fetch_json(session, url)
