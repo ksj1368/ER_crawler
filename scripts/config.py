@@ -21,6 +21,11 @@ CODE_ROOT = Path(os.getenv("code_root"))
 LOG_PATH = CODE_ROOT / "logs"
 SCHEMA_PATH = CODE_ROOT / "db" / "schema_season9.sql"
 URL_JSON_PATH = CODE_ROOT / "config" / "urls.json"
+MAPPING_ROOT = CODE_ROOT / "scripts" / "mappings"
+CREDIT_ACQUISITIONS_PATH = MAPPING_ROOT / "credit_acquisitions.json"
+CREDIT_EXPENDITURES_PATH = MAPPING_ROOT / "credit_expenditures.json"
+OBJECT_METRICS_PATH = MAPPING_ROOT / "object_metrics.json"
+GAME_METADATA_PATH = MAPPING_ROOT / "game_metadata.json"
 
 # DB Settings
 DB_HOST = os.getenv("DB_HOST", "localhost")
