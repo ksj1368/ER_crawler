@@ -42,29 +42,34 @@ def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str
         return {row[0]: row[1] for row in result}
 
 def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
-    """단일 데이터프레임을 DB에 저장하는 헬퍼 함수 (Bulk Insert 최적화)"""
+    """단일 데이터프레임을 DB에 저장하는 함수(Bulk Insert 최적화)"""
     if df.empty:
         return
     
     try:
-        # NaN을 None으로 변환 (DB NULL 처리를 위해)
+        # DB NULL 처리를 위해 NaN을 None으로 변환 
         df_obj = df.astype(object).where(pd.notnull(df), None)
         
         data_to_insert = df_obj.to_dict(orient='records')
         if not data_to_insert:
             return
 
-        # 컬럼 이름 추출
-        keys = data_to_insert[0].keys()
-        columns = ', '.join(keys)
-        placeholders = ', '.join([f":{key}" for key in keys])
-        
-        stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-
         with engine.begin() as conn:
             conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
             logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
-            conn.execute(stmt, data_to_insert)
+
+            if table_name in Base.metadata.tables:
+                table = Base.metadata.tables[table_name]
+                stmt = insert(table).values(data_to_insert)
+                conn.execute(stmt)
+            else:
+                logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                keys = data_to_insert[0].keys()
+                columns = ', '.join(keys)
+                placeholders = ', '.join([f":{key}" for key in keys])
+                
+                stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
+                conn.execute(stmt, data_to_insert)
             
     except Exception as e:
         logger.error(f"Failed to save table '{table_name}': {e}")
