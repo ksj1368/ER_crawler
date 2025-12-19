@@ -10,7 +10,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'user'
     uid = Column(String(128), primary_key=True, comment='User Identifier')
-    nickname = Column(String(30))
+    nickname = Column(String(30), index=True)
     last_match_id = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     last_updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
