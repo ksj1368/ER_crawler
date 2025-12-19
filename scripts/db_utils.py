@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine, text
+import os
+from sqlalchemy import create_engine, text, select, update
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.dialects.mysql import insert
 import pandas as pd
@@ -8,7 +9,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from scripts.config import DATABASE_URL
-from scripts.models import User
+from scripts.models import User, Base, MatchInfo
 
 logger = logging.getLogger(__name__)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
