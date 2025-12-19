@@ -5,13 +5,12 @@ import pandas as pd
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from scripts.config import DATABASE_URL
 from scripts.models import User
 
 logger = logging.getLogger(__name__)
-
-# 엔진은 애플리케이션 전체에서 한 번만 생성하는 것이 효율적입니다.
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 
 def get_engine() -> Engine:
@@ -29,28 +28,72 @@ def check_match_exists(engine: Engine, match_ids: list[int]) -> set[int]:
         result = conn.execute(stmt, {"ids": tuple(match_ids)})
         return {row[0] for row in result}
 
+def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str]:
+    """
+    닉네임 리스트를 받아 DB에 존재하는 유저의 {nickname: uid} 맵을 반환합니다.
+    """
+    if not nicknames:
+        return {}
+    
+    with engine.connect() as conn:
+        stmt = text("SELECT nickname, uid FROM user WHERE nickname IN :nicknames")
+        result = conn.execute(stmt, {"nicknames": tuple(nicknames)})
+        return {row[0]: row[1] for row in result}
+
+def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
+    """단일 데이터프레임을 DB에 저장하는 헬퍼 함수 (Bulk Insert 최적화)"""
+    if df.empty:
+        return
+    
+    try:
+        # NaN을 None으로 변환 (DB NULL 처리를 위해)
+        df_obj = df.astype(object).where(pd.notnull(df), None)
+        
+        data_to_insert = df_obj.to_dict(orient='records')
+        if not data_to_insert:
+            return
+
+        # 컬럼 이름 추출
+        keys = data_to_insert[0].keys()
+        columns = ', '.join(keys)
+        placeholders = ', '.join([f":{key}" for key in keys])
+        
+        stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
+
+        with engine.begin() as conn:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
+            logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
+            conn.execute(stmt, data_to_insert)
+            
+    except Exception as e:
+        logger.error(f"Failed to save table '{table_name}': {e}")
+        raise
+
 def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     """
     파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장합니다.
-    DataFrame.to_sql을 사용하여 효율적인 Bulk Insert를 수행합니다.
     """
-    with engine.connect() as conn:
-        with conn.begin(): # 트랜잭션 시작
+    # 저장할 모든 테이블 목록
+    all_tables = list(parsed_data.keys())
+    
+    if not all_tables:
+        return
+
+    # HDD: 워커 수를 1로 설정하여 순차 쓰기로 디스크 thrashing 방지
+    # SSD: 4~8 권장
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        futures = {
+            executor.submit(_save_single_dataframe, engine, table_name, parsed_data[table_name]): table_name
+            for table_name in all_tables
+        }
+        
+        for future in as_completed(futures):
+            table_name = futures[future]
             try:
-                for table_name, df in parsed_data.items():
-                    if not df.empty:
-                        logger.info(f"Inserting {len(df)} rows into '{table_name}'")
-                        df.to_sql(
-                            name=table_name,
-                            con=conn,
-                            if_exists='append', # 기존 데이터에 추가
-                            index=False,
-                            chunksize=1000 # 대용량 데이터를 위해 chunk 단위로 삽입
-                        )
+                future.result()
             except Exception as e:
-                logger.error(f"Failed to save data to DB: {e}")
-                # 트랜잭션이 자동으로 롤백됩니다.
-                raise
+                logger.error(f"Parallel insertion failed for {table_name}: {e}")
+                raise e
 
 def execute_sql_file(engine: Engine, file_path: str):
     """SQL 파일을 읽어 실행합니다 (init_db용)."""
@@ -131,3 +174,27 @@ def update_user_last_match(engine: Engine, uid: str, last_match_id: int):
         with conn.begin():
             conn.execute(stmt, {'uid': uid, 'last_match_id': last_match_id, 'last_updated_at': datetime.utcnow()})
     logger.info(f"Updated last_match_id for user {uid} to {last_match_id}")
+
+def update_user_last_match_bulk(engine: Engine, user_updates: List[Dict[str, Any]]):
+    """
+    여러 유저의 마지막 매치 ID를 일괄 갱신합니다. (Batch Update)
+    :param user_updates: [{'uid': str, 'last_match_id': int}, ...]
+    """
+    if not user_updates:
+        return
+
+    stmt = text("""
+        UPDATE user
+        SET last_match_id = :last_match_id, last_updated_at = :last_updated_at
+        WHERE uid = :uid
+    """)
+    
+    now = datetime.utcnow()
+    # Add timestamp to all updates
+    for update in user_updates:
+        update['last_updated_at'] = now
+        
+    with engine.connect() as conn:
+        with conn.begin():
+            conn.execute(stmt, user_updates)
+    logger.info(f"Bulk updated last_match_id for {len(user_updates)} users.")
