@@ -15,30 +15,29 @@ logger = logging.getLogger(__name__)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 
 def get_engine() -> Engine:
-    """SQLAlchemy 엔진 인스턴스를 반환합니다."""
+    """SQLAlchemy 엔진 인스턴스를 반환"""
     return engine
 
 def check_match_exists(engine: Engine, match_ids: list[int]) -> set[int]:
-    """DB에 이미 존재하는 매치 ID들을 한번에 조회하여 set으로 반환합니다."""
+    """DB에 이미 존재하는 매치 ID들을 한번에 조회하여 set으로 반환"""
     if not match_ids:
         return set()
     
     with engine.connect() as conn:
-        # IN 절을 사용하여 한번의 쿼리로 모든 ID를 확인
-        stmt = text("SELECT match_id FROM match_info WHERE match_id IN :ids")
-        result = conn.execute(stmt, {"ids": tuple(match_ids)})
+        stmt = select(MatchInfo.match_id).where(MatchInfo.match_id.in_(match_ids))
+        result = conn.execute(stmt)
         return {row[0] for row in result}
 
 def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str]:
     """
-    닉네임 리스트를 받아 DB에 존재하는 유저의 {nickname: uid} 맵을 반환합니다.
+    닉네임 리스트를 받아 DB에 존재하는 유저의 {nickname: uid} 맵을 반환
     """
     if not nicknames:
         return {}
     
     with engine.connect() as conn:
-        stmt = text("SELECT nickname, uid FROM user WHERE nickname IN :nicknames")
-        result = conn.execute(stmt, {"nicknames": tuple(nicknames)})
+        stmt = select(User.nickname, User.uid).where(User.nickname.in_(nicknames))
+        result = conn.execute(stmt)
         return {row[0]: row[1] for row in result}
 
 def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
@@ -116,24 +115,22 @@ def execute_sql_file(engine: Engine, file_path: str):
     logger.info(f"Successfully executed SQL script: {file_path}")
 
 def get_active_users(engine: Engine) -> List[Dict[str, Any]]:
-    """is_active가 True인 모든 유저의 uid, nickname, last_match_id를 조회합니다."""
+    """is_active가 True인 모든 유저의 uid, nickname, last_match_id를 조회"""
     with engine.connect() as conn:
-        stmt = text("SELECT uid, nickname, last_match_id FROM user WHERE is_active = TRUE")
+        stmt = select(User.uid, User.nickname, User.last_match_id).where(User.is_active == True)
         result = conn.execute(stmt)
         return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2]} for row in result]
 
 def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     """
-    여러 유저 정보를 Upsert합니다.
-    - DB에 없는 uid는 새로 추가합니다.
-    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신하고 is_active를 True로 설정합니다.
+    여러 유저 정보를 Upsert
+    - DB에 없는 uid는 새로 추가
+    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신하고 is_active를 True로 설정
     """
     if not users_data:
         return
 
     now = datetime.utcnow()
-    
-    # Prepare list of dictionaries for bulk insert
     values_list = [
         {
             'uid': user['uid'],
@@ -159,49 +156,34 @@ def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     logger.info(f"Upserted {len(users_data)} users.")
 
 def deactivate_user(engine: Engine, uid: str):
-    """특정 uid의 is_active를 False로 설정합니다."""
-    stmt = text("""
-        UPDATE user
-        SET is_active = FALSE, last_updated_at = :last_updated_at
-        WHERE uid = :uid
-    """)
-    with engine.connect() as conn:
-        with conn.begin():
-            conn.execute(stmt, {'uid': uid, 'last_updated_at': datetime.utcnow()})
+    """특정 uid의 is_active를 False로 설정"""
+    stmt = update(User).where(User.uid == uid).values(is_active=False, last_updated_at=datetime.utcnow())
+    with engine.begin() as conn:
+        conn.execute(stmt)
     logger.warning(f"Deactivated user with uid: {uid}")
 
 def update_user_last_match(engine: Engine, uid: str, last_match_id: int):
-    """특정 유저의 마지막 매치 ID를 갱신합니다."""
-    stmt = text("""
-        UPDATE user
-        SET last_match_id = :last_match_id, last_updated_at = :last_updated_at
-        WHERE uid = :uid
-    """)
-    with engine.connect() as conn:
-        with conn.begin():
-            conn.execute(stmt, {'uid': uid, 'last_match_id': last_match_id, 'last_updated_at': datetime.utcnow()})
+    """특정 유저의 마지막 매치 ID를 갱신"""
+    stmt = update(User).where(User.uid == uid).values(last_match_id=last_match_id, last_updated_at=datetime.utcnow())
+    with engine.begin() as conn:
+        conn.execute(stmt)
     logger.info(f"Updated last_match_id for user {uid} to {last_match_id}")
 
 def update_user_last_match_bulk(engine: Engine, user_updates: List[Dict[str, Any]]):
     """
-    여러 유저의 마지막 매치 ID를 일괄 갱신합니다. (Batch Update)
+    여러 유저의 마지막 매치 ID를 일괄 갱신 (Batch Update)
     :param user_updates: [{'uid': str, 'last_match_id': int}, ...]
     """
     if not user_updates:
         return
 
-    stmt = text("""
-        UPDATE user
-        SET last_match_id = :last_match_id, last_updated_at = :last_updated_at
-        WHERE uid = :uid
-    """)
-    
     now = datetime.utcnow()
-    # Add timestamp to all updates
-    for update in user_updates:
-        update['last_updated_at'] = now
-        
-    with engine.connect() as conn:
-        with conn.begin():
-            conn.execute(stmt, user_updates)
+    with engine.begin() as conn:
+        for update_data in user_updates:
+            stmt = update(User).where(User.uid == update_data['uid']).values(
+                last_match_id=update_data['last_match_id'],
+                last_updated_at=now
+            )
+            conn.execute(stmt)
+            
     logger.info(f"Bulk updated last_match_id for {len(user_updates)} users.")
