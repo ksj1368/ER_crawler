@@ -77,7 +77,7 @@ def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
 
 def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     """
-    파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장합니다.
+    파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장
     """
     # 저장할 모든 테이블 목록
     all_tables = list(parsed_data.keys())
@@ -85,9 +85,10 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     if not all_tables:
         return
 
-    # HDD: 워커 수를 1로 설정하여 순차 쓰기로 디스크 thrashing 방지
-    # SSD: 4~8 권장
-    with ThreadPoolExecutor(max_workers=1) as executor:
+    # 워커 수를 환경 변수로 제어 (기본값: HDD 최적화 1, SSD/Cloud: 4~8 권장)
+    max_workers = int(os.getenv("DB_MAX_WORKERS", 1))
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             executor.submit(_save_single_dataframe, engine, table_name, parsed_data[table_name]): table_name
             for table_name in all_tables
