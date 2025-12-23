@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Meta Information Parsing Module for Eternal Return Analytics
 
@@ -13,58 +12,27 @@ MySQL 스키마에 맞는 형태로 변환하는 모듈
 - Monster.json: 몬스터 정보
 
 """
-import aiohttp
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import json
-from pathlib import Path
 import pandas as pd
-from scripts.crawler import get_l10n, get_character, get_equipment, get_monster, get_area, get_char_lv
+from scripts.crawler import ERAPIClient
+from scripts.config import GAME_METADATA_PATH
+
+def _load_game_metadata():
+    try:
+        with open(GAME_METADATA_PATH, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Failed to load game metadata: {e}")
+        return {}
+
+GAME_METADATA = _load_game_metadata()
 
 def weapon_type() -> Dict[str, Any]:
-    weapon_dict = {
-        0 : "None",
-        1 : "Glove",
-        2 : "Tonfa",
-        3 : "Bat",
-        4 : "Whip",
-        5 : "HighAngleFire",
-        6 : "DirectFire",
-        7 : "Bow",
-        8 : "CrossBow",
-        9 : "Pistol",
-        10 : "AssaultRifle",
-        11 : "SniperRifle",
-        13 : "Hammer",
-        14 : "Axe",
-        15 : "OneHandSword",
-        16 : "TwoHandSword",
-        17 : "Polearm",
-        18 : "DualSword",
-        19 : "Spear",
-        20 : "Nunchaku",
-        21 : "Rapier",
-        22 : "Guitar",
-        23 : "Camera",
-        24 : "Arcana",
-        25 : "VFArm",
-        }
-    return weapon_dict
+    return {int(k): v for k, v in GAME_METADATA.get("weapon_types", {}).items()}
+
 def tactical_type() -> Dict[str, Any]:
-    tactical_dict = {
-        30: "블링크",
-        40: "퀘이크",
-        50: "프로토콜 위반",
-        60: "붉은 폭풍",
-        70: "초월",
-        80: "아티팩트",
-        90: "무효화",
-        110: "강한 결속",
-        120: "스트라이더-A13",
-        130: "진실의 칼날",
-        140: "거짓 서약",
-        150: "치유의 바람",
-    }
-    return tactical_dict
+    return {int(k): v for k, v in GAME_METADATA.get("tactical_skills", {}).items()}
 
 def parse_area_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
     area_list =[]
@@ -298,7 +266,7 @@ def parse_monster_info(data: Dict[str, Any], season: int = 8, major_version: int
 
 
 async def parse_all_meta_files(
-    session: aiohttp.ClientSession,
+    client: ERAPIClient,
     l10n_data: List[str],  # l10n 데이터를 인자로 추가
     season: int = 8, 
     major_version: int = 1, 
@@ -308,18 +276,14 @@ async def parse_all_meta_files(
     모든 메타 정보 JSON 파일을 파싱하여 테이블별 레코드를 반환
     """
     results = {}
-    a, w = await get_equipment(session)
-    char_data = await get_character(session)
+    a, w = await client.get_equipment()
+    char_data = await client.get_character()
     results['character_info'] = parse_character_info(char_data[0], season, major_version, minor_version)
-    results['character_levelup_stats'] = parse_character_levelup_stats(await get_char_lv(session))  
+    results['character_levelup_stats'] = parse_character_levelup_stats(await client.get_char_lv())  
     results['item_weapon'] = parse_item_weapon(w, season, major_version, minor_version)  
     results['item_armor'] = parse_item_armor(a, season, major_version, minor_version)  
-    results['monster_info'] = parse_monster_info(await get_monster(session), season, major_version, minor_version)  
-    results['area_info'] = parse_area_info(await get_area(session), season, major_version, minor_version)
-
-    # --- [추가된 코드] l10n 데이터 처리 ---
-    # parse_from_l10n 함수를 사용하여 weather, installation, trait 정보 파싱
-    
+    results['monster_info'] = parse_monster_info(await client.get_monster(), season, major_version, minor_version)  
+    results['area_info'] = parse_area_info(await client.get_area(), season, major_version, minor_version)
     results['weather_info'] = parse_from_l10n(l10n_data, 'weather', season, major_version, minor_version)
     results['installation_info'] = parse_from_l10n(l10n_data, 'installation', season, major_version, minor_version)
     results['trait_info'] = parse_from_l10n(l10n_data, 'trait', season, major_version, minor_version)
