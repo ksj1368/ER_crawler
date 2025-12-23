@@ -1,5 +1,7 @@
 import asyncio
-import aiohttp
+import os
+import psutil
+import gc
 from time import time
 from typing import List, Dict, Any
 
@@ -12,6 +14,12 @@ from scripts.crawler import get_top_ranker, get_users_by_nickname_async, get_use
 from scripts.db_utils import get_engine, deactivate_user, get_active_users, upsert_users, update_user_last_match, save_dataframes_to_db, check_match_exists
 from scripts.match_info_parsing import top_ranker_nicknames, parse_match_data, parse_match_user_start
 from scripts.logger import logger
+
+def log_memory():
+    """현재 프로세스의 메모리 사용량을 로깅합니다."""
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    logger.info(f"[Memory] RSS: {mem_info.rss / 1024 / 1024:.2f} MB")
 
 async def seed_top_rankers():
     """
