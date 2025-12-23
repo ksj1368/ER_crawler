@@ -1,7 +1,7 @@
 import asyncio
 import aiohttp
 from scripts.config import SEASON_ID, MAIN_VERSION
-from scripts.crawler import get_l10n, HEADERS_WITH_KEY
+from scripts.crawler import ERAPIClient
 from scripts.hash_info_parsing import parse_all_meta_files, weapon_type, tactical_type
 from scripts.db_utils import get_engine, save_dataframes_to_db
 from scripts.logger import logger
@@ -11,7 +11,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy import text
 
 
-async def populate_static_tables(session: aiohttp.ClientSession):
+async def populate_static_tables(client: ERAPIClient):
     """
     게임 정적 데이터(캐릭터, 아이템 등)를 가져와 파싱하고 테이블이 비어있는 경우 DB에 저장
     """
@@ -35,18 +35,18 @@ async def populate_static_tables(session: aiohttp.ClientSession):
 
 
     logger.info("--- Starting Static Data Population ---")
-    # 1. l10n 데이터 가져오기
+    # l10n 데이터 가져오기
     logger.info("Fetching l10n data...")
-    l10n_data = await get_l10n(session)
+    l10n_data = await client.get_l10n()
     if not l10n_data:
         logger.error("Failed to get l10n data. Aborting static data population.")
         return
 
-    # 2. 모든 메타 파일 파싱하기
+    # 모든 메타 데이터 파싱
     logger.info("Parsing all meta files...")
     try:
         # config.py의 버전을 사용 minor_version은 0으로 고정
-        meta_dataframes = await parse_all_meta_files(session, l10n_data, season=SEASON_ID, major_version=MAIN_VERSION, minor_version=0)
+        meta_dataframes = await parse_all_meta_files(client, l10n_data, season=SEASON_ID, major_version=MAIN_VERSION, minor_version=0)
         
         # weapon_type과 tactical_type을 데이터프레임에 추가
         weapon_df = pd.DataFrame(list(weapon_type().items()), columns=['weapon_id', 'weapon_name'])
@@ -60,7 +60,7 @@ async def populate_static_tables(session: aiohttp.ClientSession):
         logger.error(f"Failed to parse meta files: {e}", exc_info=True)
         return
 
-    # 3. DB에 데이터 저장하기
+    # DB에 수집 데이터 저장하기
     logger.info("Saving meta data to database...")
     try:
         save_dataframes_to_db(engine, meta_dataframes)
@@ -70,15 +70,15 @@ async def populate_static_tables(session: aiohttp.ClientSession):
 
 
 async def main():
-    async with aiohttp.ClientSession(headers=HEADERS_WITH_KEY) as session:
-        # 1. 정적 데이터 테이블이 비어있으면 채우기
-        await populate_static_tables(session)
+    async with ERAPIClient() as client:
+        # 정적 데이터 테이블이 비어있으면 채우기
+        await populate_static_tables(client)
         
-    # 2. pipeline.py에 위임하여 매치 데이터 수집을 위한 메인 파이프라인을 실행
+    # 매치 데이터 수집을 위한 파이프라인 실행
+    # seed: 초기 데이터 수집을 위한 상위 랭커 유저 수집
+    # run: 기존 수집된 유저 기반으로 매치 데이터 수집
     logger.info("--- Starting Match Data Collection ---")
     logger.info("Delegating to pipeline.py. Use 'seed' or 'run' as a command-line argument.")
-    
-    # pipeline.main() 함수는 자체적으로 커맨드 라인 인자('seed' 또는 'run')를 처리
     await pipeline.main()
 
 if __name__ == "__main__":
