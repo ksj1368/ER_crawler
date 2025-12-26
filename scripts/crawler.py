@@ -172,7 +172,7 @@ class ERAPIClient:
     async def get_top_ranker(self, season_id: int, matching_mode: int, server_code: int) -> dict | None:
         url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
         data = await self._fetch_json(url, response_model=TopRankerResponse)
-        return data.dict() if data else None
+        return data.model_dump() if data else None
 
     async def fetch_user_by_nickname_async(self, nickname: str) -> Dict[str, Any] | None:
         url = f"{BASE_URL}{URLS['user']['nickname']}"
@@ -180,7 +180,7 @@ class ERAPIClient:
         if data and "user" in data:
             user_obj = data["user"]
             try:
-                UserBase.parse_obj(user_obj)
+                UserBase.model_validate(user_obj)
                 return user_obj
             except ValidationError as ve:
                 logger.error(f"User validation error for {nickname}: {ve}")
@@ -194,7 +194,7 @@ class ERAPIClient:
     async def fetch_user_games(self, url: str) -> Tuple[int, dict]:
         data = await self._fetch_json(url, response_model=MatchResponse)
         if data:
-            return 200, data.dict()
+            return 200, data.model_dump()
         return 404, None 
 
     async def get_user_games_by_uid_async(self, users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
@@ -240,7 +240,7 @@ class ERAPIClient:
     async def fetch_match_info(self, match_id: int):
         url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
         data = await self._fetch_json(url, response_model=MatchResponse)
-        return match_id, data.dict() if data else None
+        return match_id, data.model_dump() if data else None
 
     async def get_match_infos_async(self, match_ids: List[int], batch_size: int = 100) -> AsyncGenerator[Tuple[int, Any], None]:
         for i in range(0, len(match_ids), batch_size):
@@ -254,4 +254,4 @@ class ERAPIClient:
     async def match_info(self, match_id: int) -> dict | None:
         url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
         data = await self._fetch_json(url, response_model=MatchResponse)
-        return data.dict() if data else None
+        return data.model_dump() if data else None
