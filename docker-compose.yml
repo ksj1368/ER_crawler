@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: er_mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-erdb}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  crawler:
+    build: .
+    container_name: er_crawler
+    depends_on:
+      - db
+    environment:
+      - API_KEY=${API_KEY}
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-erdb}
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DISABLE_FILE_LOGGING=true
+      - season_id=${season_id}
+      - matching_mode=${matching_mode}
+      - main_version=${main_version}
+      - region_id=${region_id}
+    restart: on-failure
+    entrypoint: ["/bin/sh", "-c"]
+    command: "alembic upgrade head && python scripts/main.py run"
+
+volumes:
+  mysql_data:
