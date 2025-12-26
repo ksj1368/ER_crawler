@@ -7,13 +7,11 @@ def check_counts():
         user_count = conn.execute(text("SELECT COUNT(*) FROM user")).scalar()
         active_user_count = conn.execute(text("SELECT COUNT(*) FROM user WHERE is_active = TRUE")).scalar()
         match_count = conn.execute(text("SELECT COUNT(*) FROM match_info")).scalar()
-        latest_match = conn.execute(text("SELECT MAX(match_id) FROM match_info")).scalar()
         
         print(f"--- Database Statistics ---")
         print(f"Total users: {user_count}")
         print(f"Active users: {active_user_count}")
         print(f"Total matches: {match_count}")
-        print(f"Latest match ID: {latest_match}")
 
 if __name__ == "__main__":
     check_counts()
