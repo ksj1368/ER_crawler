@@ -54,6 +54,28 @@ eternal_return_crawler/
 -   **`config.py`**: API 키, 데이터베이스 정보, 경로 등 프로젝트의 주요 설정을 관리하는`.env` 파일로부터 환경 변수를 로드
 -   **`logger.py`**: 로깅 설정을 담당하여 파일 및 콘솔에 로그를 출력
 
+## 데이터 수집
+
+```mermaid
+graph TD
+    A[Start: Top Rankers] --> B{Existing Matches?}
+    B -- No --> C[Crawl: match_info]
+    C --> D[Extract: All Participants]
+    D --> E[Add to User Queue]
+    E --> F[Crawl: User Match History]
+    F --> G[Extract: match_ids]
+    G --> B
+    C --> H[Parse: match_user_start]
+    C --> I[Parse: combat/damage/object/etc]
+    H --> J[Load: Bulk Insert to MySQL]
+    I --> J
+```
+1.  **Seed 수집**: 상위 랭커 유저들의 매치 기록을 조회하여 초기 `match_id`를 확보
+2.  **스노우볼링**: 수집된 매치에 참여한 모든 유저(`MatchUserStart`)의 `uid`를 추출하여 다음 수집 대상 큐에 추가하여 유저를 수집하고 새로운 매치를 수집
+3.  **데이터 파이프라인**:
+    -   **Crawler**: Open API에서 JSON 응답을 비동기로 수집 (Rate Limit: 50 req/s 준수)
+    -   **Parser**: `match_info_parsing.py`가 거대한 JSON 응답을 테이블별(전투, 데미지, 오브젝트 등) DataFrame으로 분해 및 변환
+
 ## 설치 및 설정
 
 1.  **Poetry 설치**:

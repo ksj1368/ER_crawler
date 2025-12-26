@@ -1,8 +1,45 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 import copy
+import json
 from collections import Counter
 import pandas as pd
+from scripts.config import CREDIT_ACQUISITIONS_PATH, CREDIT_EXPENDITURES_PATH, OBJECT_METRICS_PATH
+
+def _load_json_mappings():
+    try:
+        with open(CREDIT_ACQUISITIONS_PATH, 'r', encoding='utf-8') as f:
+            acq_data = json.load(f)
+        with open(CREDIT_EXPENDITURES_PATH, 'r', encoding='utf-8') as f:
+            exp_data = json.load(f)
+        with open(OBJECT_METRICS_PATH, 'r', encoding='utf-8') as f:
+            obj_data = json.load(f)
+            
+        return {
+            "source_mapping": {k: tuple(v) for k, v in acq_data.get("source_mapping", {}).items()},
+            "skip_cr_sources": set(acq_data.get("skip_cr_sources", [])),
+            "console_item_mapping": {int(k): tuple(v) for k, v in exp_data.get("console_item_mapping", {}).items()},
+            "credit_source_mapping": {k: tuple(v) for k, v in exp_data.get("credit_source_mapping", {}).items()},
+            "special_material_keys": exp_data.get("special_material_keys", {}),
+            "drone_season_9": {int(k): tuple(v) for k, v in exp_data.get("drone_item_mapping_season_9_plus", {}).items()},
+            "drone_season_8": {int(k): tuple(v) for k, v in exp_data.get("drone_item_mapping_season_8", {}).items()},
+            "robot_fixed_prices": {int(k): v for k, v in exp_data.get("robot_fixed_prices", {}).items()},
+            "discount_info": {
+                **exp_data.get("discount_info", {}),
+                "target_items": set(exp_data.get("discount_info", {}).get("target_items", []))
+            },
+            "other_drone_item_cost": exp_data.get("other_drone_item_cost", {}),
+            "object_metrics": {
+                "direct_metrics": {k: tuple(v) for k, v in obj_data.get("direct_metrics", {}).items()},
+                "kill_monster_metrics": obj_data.get("kill_monster_metrics", {}),
+                "collect_log_metrics": obj_data.get("collect_log_metrics", {})
+            }
+        }
+    except Exception as e:
+        print(f"Failed to load mappings: {e}")
+        return {}
+
+MAPPINGS = _load_json_mappings()
 
 def top_ranker_nicknames(data: dict) -> List[str]:
     """topRanks 데이터에서 상위 랭커의 nickname 리스트를 추출합니다.
@@ -253,28 +290,8 @@ def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
     크레딧 획득 정보 파싱
     """
     acquisition_list = []
-    source_mapping = {
-        "KillChicken": ("monster", "Monster"), "KillBat": ("monster", "Monster"),
-        "KillWolf": ("monster", "Monster"), "KillBoar": ("monster", "Monster"),
-        "KillWildDog": ("monster", "Monster"), "KillBear": ("monster", "Monster"),
-        "KillRaven": ("monster", "Monster"), "KillAttackDrone": ("monster", "Monster"),
-        "KillMutantChicken": ("monster", "Monster"), "KillMutantBat": ("monster", "Monster"),
-        "KillMutantWolf": ("monster", "Monster"), "KillMutantBoar": ("monster", "Monster"),
-        "KillMutantWildDog": ("monster", "Monster"), "KillMutantBear": ("monster", "Monster"),
-        "KillMutantRaven": ("monster", "Monster"), "KillAlpha": ("monster", "Epic"),
-        "KillOmega": ("monster", "Epic"), "KillGamma": ("monster", "Epic"),
-        "KillWickline": ("monster", "Boss"), "KillPlayerMerge": ("player", "player"),
-        "KillAssistDivideContribute": ("player", "player"), "GoldSecurityConsoleAccess": ("env", "env"),
-        "DoorConsoleAccess": ("env", "env"), "KillOrb": ("env", "orb"),
-        "AcquireLumiCredit": ("env", "lumi"), "PreliminaryPhase": ("timebased", "game"),
-        "TimeElapsedCompensationByMiliSecond": ("timebased", "game"),
-        "TimeElapsedCreditBonusByMiliSecond": ("timebased", "game"),
-        "ItemBounty": ("bounty", "special"), "ItemBountyByItemCode": ("bounty", "special"),
-        "GetBySkill": ("special", "skill"), "TraitSkillCoinToss": ("special", "trait"),
-        "crGetCreditBonus": ("special", "skill"),
-        "AcquireBoriCredit": ("env", "bori"),
-    }
-    skip_cr_sources = {"KioskSpecialMaterial", "guideRobotFlagShip", "guideRobotSignature", "guideRobotRadial", "KioskRemoteDroneMySelf", "KioskResurrection", "KioskRemoteDroneAlly", "TacticalSkillUpgrade"}
+    source_mapping = MAPPINGS.get("source_mapping", {})
+    skip_cr_sources = MAPPINGS.get("skip_cr_sources", set())
     
     for u in data.get("userGames", []):
         for source, amount in u.get("creditSource", {}).items():
@@ -293,71 +310,27 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
     """
     expenditure_list = []
 
-    # (매핑 딕셔너리들은 변경 없이 그대로 사용)
-    # creditSource 내부 키 대상 매핑
-    credit_source_mapping = {
-        "KioskResurrection": ("revival", 1),
-        "KioskRemoteDroneMySelf": ("remotedrone", 1),
-        "GuideRobotSignature": ("robot", 1),
-        "GuideRobotRadial": ("robot", 1),
-        "guideRobotFlagShip": ("robot", 1),
-    }
+    # MAPPINGS에서 데이터 로드
+    credit_source_mapping = MAPPINGS.get("credit_source_mapping", {})
+    console_item_mapping = MAPPINGS.get("console_item_mapping", {})
+    special_material_keys = MAPPINGS.get("special_material_keys", {})
+    robot_fixed_prices = MAPPINGS.get("robot_fixed_prices", {})
+    discount_info = MAPPINGS.get("discount_info", {})
     
-    # 키오스크(콘솔) + 안내 로봇 아이템 코드 대상 매핑 (원본 가격)
-    console_item_mapping = {
-        306001: ("gadget_pack", "kiosk_item", 20),
-        301226: ("hamburger", "kiosk_item", 0),
-        401401: ("vf_sample", "kiosk_item", 500),
-        401403: ("forcecore", "kiosk_item", 350),
-        401304: ("mythril", "kiosk_item", 250),
-        401208: ("tree_of_life", "kiosk_item", 200),
-        401209: ("meteorite", "kiosk_item", 200),
-        999999: ("tactical_skill_upgrade", "kiosk_item", 200),
-        502208: ("basic_drone", "robot_item", 5),
-        502207: ("camera", "robot_item", 5),
-    }
-
-    # 특수 재료 총 소모량 키와 아이템 코드 매핑
-    special_material_keys = {
-        "crUseVFBloodSample": 401401,
-        "crUseForceCore": 401403,
-        "crUseMythril": 401304,
-        "crUseTreeOfLife": 401208,
-        "crUseMeteorite": 401209,
-    }
+    discount_trait_code = discount_info.get("trait_code")
+    discount_amount = discount_info.get("amount", 0)
+    discount_target_items = discount_info.get("target_items", set())
 
     # 드론 아이템 코드 대상 매핑
-    if data['userGames'][0]['versionSeason'] <= 8:
-        fried_chicken_cr = 25
-    else:
-        fried_chicken_cr = 20
-        
-    drone_item_mapping = {
-        502308: ("emp_drone", "remotedrone_item", 30),
-        502208: ("basic_drone", "remotedrone_item", 20),
-        502207: ("camera", "remotedrone_item", 20),
-        502405: ("guillotine", "remotedrone_item", 100),
-        502404: ("c4", "remotedrone_item", 100),
-        301316: ("fried_chicken", "remotedrone_item", fried_chicken_cr),
-    }
-    
-    # 로봇이 판매하는 특정 아이템의 고정 가격
-    robot_fixed_prices = {
-        401403: 320,
-        401304: 220,
-        401208: 160,
-        401209: 160,
-    }
-
-    discount_trait_code = 7210801
-    discount_amount = 15
-    discount_target_items = {401401, 401403, 401304, 401208, 401209, 999999}
+    is_season_9_plus = data['userGames'][0]['versionSeason'] > 8
+    drone_item_mapping = MAPPINGS.get("drone_season_9", {}) if is_season_9_plus else MAPPINGS.get("drone_season_8", {})
+    other_item_cr = MAPPINGS.get("other_drone_item_cost", {}).get("season_9_plus" if is_season_9_plus else "season_8", 10)
 
     for u in data.get("userGames", []):
         match_id = u["gameId"]
         uid = u["uid"]
 
-        # (할인 로직 및 키오스크/로봇 구분 로직은 이전과 동일)
+        # 할인 로직 적용
         kiosk_prices = copy.deepcopy(console_item_mapping)
         user_traits = u.get("traitFirstSub", []) + u.get("traitSecondSub", [])
         if discount_trait_code in user_traits:
@@ -388,12 +361,10 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             else:
                 robot_purchase_log.append(item_code)
 
-        # --- 로봇 구매 처리 로직 (성능 개선) ---
+        # --- 로봇 구매 처리 로직 ---
         remaining_items = [item for item in robot_purchase_log if item != 999999]
-        # Counter를 사용해 각 아이템의 개수를 한번에 계산 (시간 복잡도 O(N))
         remaining_item_counts = Counter(remaining_items)
         
-        # 이제 루프 안에서 .count()를 호출할 필요 없음
         for item_code, count in remaining_item_counts.items():
             if item_code in console_item_mapping:
                 name, _, original_price = console_item_mapping[item_code]
@@ -416,14 +387,11 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                     "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count
                 })
 
-        # --- 드론 아이템 처리 로직 (성능 개선) ---
+        # --- 드론 아이템 처리 로직 ---
         item_transferred_drone = u.get("itemTransferredDrone", [])
         if item_transferred_drone:
-            # Counter를 사용해 각 드론 아이템의 개수를 한번에 계산
             drone_item_counts = Counter(item_transferred_drone)
-            
             for item_code, (name, exp_type, cost) in drone_item_mapping.items():
-                # .count() 대신 O(1) 시간 복잡도의 .pop()으로 값 가져오기
                 count = drone_item_counts.pop(item_code, 0)
                 if count > 0:
                     expenditure_list.append({
@@ -432,12 +400,7 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                         "credit_amount": int(count * cost), "usage_count": count
                     })
             
-            # Counter에 남아있는 아이템들이 'etc'에 해당
             other_items_count = sum(drone_item_counts.values())
-            if data['userGames'][0]['versionSeason'] <= 8:
-                other_item_cr = 15
-            else:
-                other_item_cr = 10
             if other_items_count > 0:
                 expenditure_list.append({
                     "match_id": match_id, "uid": uid,
@@ -512,14 +475,11 @@ def parse_match_user_mmr(data: dict) -> pd.DataFrame:
 def parse_object(data: dict) -> pd.DataFrame:
     """Long Format으로 오브젝트 정보 파싱"""
     object_list = []
-    direct_metrics = {
-        "damage_to_rumi": ("damageToGuideRobot", "damage"), "damage_to_monster": ("damageToMonster", "damage"),
-        "total_kill_monster": ("monsterKill", "kill_monster"), "get_cube_red": ("getBuffCubeRed", "get_cube"),
-        "get_cube_green": ("getBuffCubeGreen", "get_cube"), "get_cube_gold": ("getBuffCubeGold", "get_cube"),
-        "get_cube_purple": ("getBuffCubePurple", "get_cube"), "get_cube_skyblue": ("getBuffCubeSkyBlue", "get_cube"),
-    }
-    kill_monster_metrics = {"8": "kill_alpha", "9": "kill_omega", "10": "kill_gamma", "7": "kill_wickline"}
-    collect_log_metrics = {4: "collect_tree_of_life", 5: "collect_meteorite"}
+    
+    obj_mappings = MAPPINGS.get("object_metrics", {})
+    direct_metrics = obj_mappings.get("direct_metrics", {})
+    kill_monster_metrics = obj_mappings.get("kill_monster_metrics", {})
+    collect_log_metrics = obj_mappings.get("collect_log_metrics", {})
 
     for u in data.get("userGames", []):
         match_id, uid = u["gameId"], u["uid"]
@@ -532,7 +492,8 @@ def parse_object(data: dict) -> pd.DataFrame:
             if value > 0:
                 object_list.append({"match_id": match_id, "uid": uid, "metric_type": "kill_boss", "metric_name": name, "value": value})
         collect_log = u.get("collectItemForLog", [])
-        for idx, name in collect_log_metrics.items():
+        for idx_str, name in collect_log_metrics.items():
+            idx = int(idx_str)
             if len(collect_log) > idx and (value := collect_log[idx]) > 0:
                 object_list.append({"match_id": match_id, "uid": uid, "metric_type": "collect_special", "metric_name": name, "value": value})
         for key, value in u.get("activeInstallation", {}).items():
