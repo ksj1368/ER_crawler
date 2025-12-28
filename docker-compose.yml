@@ -1,7 +1,60 @@
 version: '3.8'
 
+x-airflow-common:
+  &airflow-common
+  build: .
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    
+    # Custom Environment Variables for Crawler
+    API_KEY: ${API_KEY}
+    DB_HOST: er_mysql
+    DB_PORT: 3306
+    DB_NAME: ${DB_NAME:-erdb}
+    DB_USER: root
+    DB_PASSWORD: ${DB_PASSWORD:-password}
+    DISABLE_FILE_LOGGING: 'true'
+    season_id: ${season_id}
+    matching_mode: ${matching_mode}
+    main_version: ${main_version}
+    region_id: ${region_id}
+    PYTHONPATH: /opt/airflow:/home/airflow/.local/lib/python3.10/site-packages
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./scripts:/opt/airflow/scripts
+    - ./config:/opt/airflow/config
+    - ./logs:/opt/airflow/logs
+    - ./data:/opt/airflow/data
+    - ./alembic:/opt/airflow/alembic
+    - ./alembic.ini:/opt/airflow/alembic.ini
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    &airflow-common-depends-on
+    postgres:
+      condition: service_healthy
+    er_mysql:
+      condition: service_healthy
+
 services:
-  db:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  er_mysql:
     image: mysql:8.0
     container_name: er_mysql
     restart: always
@@ -9,30 +62,51 @@ services:
       MYSQL_DATABASE: ${DB_NAME:-erdb}
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
     ports:
-      - "${DB_PORT:-3306}:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
-  crawler:
-    build: .
-    container_name: er_crawler
-    depends_on:
-      - db
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    # Run alembic migrations for the crawler DB, then init airflow
+    command:
+      - -c
+      - |
+        mkdir -p /sources/logs /sources/dags /sources/plugins
+        chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
+        exec /entrypoint airflow version
     environment:
-      - API_KEY=${API_KEY}
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=${DB_NAME:-erdb}
-      - DB_USER=root
-      - DB_PASSWORD=${DB_PASSWORD:-password}
-      - DISABLE_FILE_LOGGING=true
-      - season_id=${season_id}
-      - matching_mode=${matching_mode}
-      - main_version=${main_version}
-      - region_id=${region_id}
-    restart: on-failure
-    entrypoint: ["/bin/sh", "-c"]
-    command: "alembic upgrade head && python scripts/main.py run"
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+    user: "0:0"
+    volumes:
+      - .:/sources
 
 volumes:
+  postgres-db-volume:
   mysql_data:

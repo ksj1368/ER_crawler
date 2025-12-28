@@ -12,6 +12,3 @@ tests/
 .gitignore
 README.md
 *.pdf
-alembic/
-alembic.ini
-db/*.sql
