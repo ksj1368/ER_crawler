@@ -284,7 +284,7 @@ class MatchUserTrait(Base):
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
     uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
     trait_id = Column(Integer, primary_key=True)
-    trait_type = Column(String(16))
+    trait_type = Column(String(16), primary_key=True)
 
 class MatchUserDamage(Base):
     __tablename__ = 'match_user_damage'
@@ -384,20 +384,29 @@ class MatchUserSight(Base):
 
 # --- Long Format Data Tables ---
 
+class CreditAcquisitionSource(Base):
+    __tablename__ = 'credit_acquisition_source'
+    source_id = Column(Integer, primary_key=True, autoincrement=True)
+    source_name = Column(String(64), unique=True)
+
 class MatchUserCreditAcquisitions(Base):
     __tablename__ = 'match_user_credit_acquisitions'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
-    acquisition_source = Column(String(32), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    uid = Column(String(128), ForeignKey('match_user_start.uid'))
+    acquisition_source_id = Column(Integer, ForeignKey('credit_acquisition_source.source_id'))
     acquisition_type = Column(String(32))
     credit_amount = Column(Float)
     source_category = Column(String(32))
 
+    source_info = relationship("CreditAcquisitionSource")
+
 class MatchUserCreditExpenditures(Base):
     __tablename__ = 'match_user_credit_expenditures'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
-    expenditure_item = Column(String(32), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    uid = Column(String(128), ForeignKey('match_user_start.uid'))
+    expenditure_item = Column(String(32))
     expenditure_type = Column(String(32))
     credit_amount = Column(Integer)
     usage_count = Column(Integer)
@@ -412,8 +421,9 @@ class MatchUserCreditTime(Base):
 
 class MatchUserObject(Base):
     __tablename__ = 'match_user_object'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    uid = Column(String(128), ForeignKey('match_user_start.uid'))
     metric_type = Column(String(32))
-    metric_name = Column(String(32), primary_key=True)
+    metric_name = Column(String(32))
     value = Column(Integer)
