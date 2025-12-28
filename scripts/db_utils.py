@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import create_engine, text, select, update
-from sqlalchemy.engine import Engine, Connection
+from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
 import pandas as pd
 import logging
@@ -9,7 +9,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from scripts.config import DATABASE_URL
-from scripts.models import User, Base, MatchInfo
+from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource
 
 logger = logging.getLogger(__name__)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
@@ -40,8 +40,56 @@ def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str
         result = conn.execute(stmt)
         return {row[0]: row[1] for row in result}
 
+def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Dict[str, int]:
+    """
+    크레딧 획득처를 mapping: {source_name: source_id}으로 반환.
+    DB에 없는 새로운 source_id은 새로 생성
+    """
+    if not sources:
+        return {}
+        
+    source_map = {}
+    missing_sources = []
+    
+    # 1. 기존 크레딧 획득처 조회
+    with engine.connect() as conn:
+        stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
+            CreditAcquisitionSource.source_name.in_(sources)
+        )
+        result = conn.execute(stmt)
+        existing = {row[0]: row[1] for row in result}
+        source_map.update(existing)
+        
+    # 2. 없는 크레딧 획득처 필터링
+    for src in sources:
+        if src not in source_map:
+            missing_sources.append(src)
+            
+    # 3. 신규 크레딧 획득처 생성 및 추가
+    if missing_sources:
+        try:
+            with engine.begin() as conn:
+                values = [{"source_name": src} for src in missing_sources]
+                stmt = text("INSERT IGNORE INTO credit_acquisition_source (source_name) VALUES (:source_name)")
+                conn.execute(stmt, values)
+                
+            # 4. 생성된 ID 조회
+            with engine.connect() as conn:
+                stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
+                    CreditAcquisitionSource.source_name.in_(missing_sources)
+                )
+                result = conn.execute(stmt)
+                new_mapping = {row[0]: row[1] for row in result}
+                source_map.update(new_mapping)
+                
+        except Exception as e:
+            logger.error(f"Failed to create acquisition sources: {e}")
+            raise
+            
+    return source_map
+
 def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
-    """단일 데이터프레임을 DB에 저장하는 함수(Bulk Insert 최적화)"""
+    """단일 데이터프레임을 DB에 저장하는 함수"""
     if df.empty:
         return
     
@@ -78,6 +126,20 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     """
     파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장
     """
+    # 크레딧 획득 소스 매핑
+    if 'match_user_credit_acquisitions' in parsed_data:
+        df = parsed_data['match_user_credit_acquisitions']
+        if not df.empty and 'acquisition_source' in df.columns:
+            unique_sources = df['acquisition_source'].unique().tolist()
+            source_map = _get_or_create_acquisition_sources(engine, unique_sources)
+            
+            # ID로 매핑
+            df['acquisition_source_id'] = df['acquisition_source'].map(source_map)
+            
+            # 원본 컬럼 및 알 수 없는 소스 제거
+            df.drop(columns=['acquisition_source'], inplace=True)
+            df.dropna(subset=['acquisition_source_id'], inplace=True)
+            
     # 저장할 모든 테이블 목록
     all_tables = list(parsed_data.keys())
     
@@ -171,7 +233,7 @@ def update_user_last_match(engine: Engine, uid: str, last_match_id: int):
 
 def update_user_last_match_bulk(engine: Engine, user_updates: List[Dict[str, Any]]):
     """
-    여러 유저의 마지막 매치 ID를 일괄 갱신 (Batch Update)
+    여러 유저의 마지막 매치 ID를 일괄 갱신(Batch Update)
     :param user_updates: [{'uid': str, 'last_match_id': int}, ...]
     """
     if not user_updates:
