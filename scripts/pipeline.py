@@ -4,7 +4,6 @@ import psutil
 import gc
 from time import time
 from datetime import datetime
-
 import pandas as pd
 
 from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID
@@ -38,7 +37,7 @@ async def seed_top_rankers():
             return
         
         nicknames = top_ranker_nicknames(rankers_json)
-        # nicknames = nicknames[:100] # 디버그용 샘플링
+        # nicknames = nicknames[:1000] # 디버그용 샘플링
         logger.info(f"Found {len(nicknames)} top ranker nicknames.")
         
         # 닉네임으로 uid 조회
@@ -56,28 +55,44 @@ async def seed_top_rankers():
 
 async def run_pipeline():
     """
-    데이터 수집 및 처리 파이프라인 실행 (스노우볼링 방식)
+    데이터 수집 파이프라인
+    1. 활성 유저 유무 확인
+    2. 유저가 없으면(초기 상태) 자동으로 시드 데이터(Top Rankers) 수집
+    3. 유저가 있으면 기존 크롤링(스노우볼링) 로직 수행
     """
     pipeline_start_time = time()
-    logger.info("--- Starting data collection pipeline (Snowballing) ---")
+    logger.info("--- Start Pipeline ---")
     log_memory()
     engine = get_engine()
 
-    async with ERAPIClient() as client:
-        # DB에서 active user 가져오기
-        step_start_time = time()
-        active_users = get_active_users(engine)
-        # active_users = active_users[:1000]  # 디버그용 샘플링
-        logger.info(f"Step 1: Fetching active users finished in {time() - step_start_time:.2f}s")
-        log_memory()
-        
-        if not active_users:
-            logger.warning("No active users found in the database. Consider seeding first. Exiting.")
-            return
-        
-        active_user_nicknames = {user['nickname'] for user in active_users}
-        logger.info(f"Found {len(active_users)} active users to process. (e.g., {list(active_user_nicknames)[:5]})")
+    # 1. 활성 유저 확인
+    step_start_time = time()
+    active_users = get_active_users(engine)
+    logger.info(f"Initial Check: Found {len(active_users)} active users.")
 
+    # 2. 유저가 없으면 Auto-Seeding 수행
+    if not active_users:
+        logger.info("No active users found. Initiating Auto-Seeding...")
+        await seed_top_rankers()
+        
+        # 재확인
+        active_users = get_active_users(engine)
+        if not active_users:
+            logger.error("Auto-Seeding failed. No users found even after seeding. Exiting.")
+            return
+        logger.info(f"Auto-Seeding complete. Found {len(active_users)} active users.")
+    else:
+        logger.info("Active users exist. Proceeding to crawling...")
+
+    # active_users 제한 (디버그/테스트용, 필요시 주석 해제 또는 환경변수 처리)
+    # active_users = active_users[:1000] 
+
+    logger.info(f"Step 1: User check/seeding finished in {time() - step_start_time:.2f}s")
+    log_memory()
+
+    logger.info(f"Processing {len(active_users)} active users.")
+
+    async with ERAPIClient() as client:
         # 각 유저의 신규 게임 정보 수집
         step_start_time = time()
         user_game_generator = client.get_user_games_by_uid_async(active_users)
@@ -106,10 +121,11 @@ async def run_pipeline():
         if not all_new_match_ids:
             logger.info("No new matches found across all active users. Pipeline finished.")
             return
-            
-        existing_match_ids = check_match_exists(engine, list(all_new_match_ids))
-        final_match_ids_to_process = list(all_new_match_ids - existing_match_ids)
-        # final_match_ids_to_process = final_match_ids_to_process[:500] # 디버그용 샘플링
+        
+        
+        existing_match_ids = check_match_exists(engine, list(all_new_match_ids)) # 기존 매치 ID 조회
+        final_match_ids_to_process = list(all_new_match_ids - existing_match_ids) # 신규 매치 ID 필터링
+        # final_match_ids_to_process = final_match_ids_to_process[:1000] # 디버그용 샘플링
         logger.info(f"Step 3: Filtering new matches finished in {time() - step_start_time:.2f}s")
         
         if not final_match_ids_to_process:
@@ -120,8 +136,9 @@ async def run_pipeline():
         logger.info(f"Found {total_matches} new unique matches to process. Starting batch processing...")
 
         # 배치 처리
-        BATCH_SIZE = 500 # OOM 방지용
-        
+        BATCH_SIZE = 100 # OOM 방지용
+
+        # 배치별 매치 데이터 수집 및 저장
         for i in range(0, total_matches, BATCH_SIZE):
             batch_match_ids = final_match_ids_to_process[i:i + BATCH_SIZE]
             logger.info(f"--- Processing Batch {i // BATCH_SIZE + 1} / {(total_matches - 1) // BATCH_SIZE + 1} ({len(batch_match_ids)} matches) ---")
@@ -139,7 +156,7 @@ async def run_pipeline():
                     for user in raw_data['userGames']:
                         batch_participant_nicknames.add(user['nickname'])
             
-            # 원본 매치테이터를 데이터 레이크에 저장 (옵션)
+            # 원본 매치테이터를 데이터 레이크에 저장
             if raw_match_data_list:
                 import json
                 from pathlib import Path
@@ -240,20 +257,3 @@ async def run_pipeline():
 
     elapsed_time = time() - pipeline_start_time
     logger.info(f"--- Data collection pipeline finished in {elapsed_time:.2f} seconds ---")
-
-async def main():
-    """command에 알맞는 파이프라인 함수를 실행합니다."""
-    import sys
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        if command == 'seed':
-            await seed_top_rankers()
-        elif command == 'run':
-            await run_pipeline()
-        else:
-            print(f"Unknown command: {command}. Use 'seed' or 'run'.")
-    else:
-        print("Please provide a command: 'seed' or 'run'.")
-
-if __name__ == '__main__':
-    asyncio.run(main())
