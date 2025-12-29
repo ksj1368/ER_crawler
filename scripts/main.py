@@ -1,11 +1,12 @@
 import asyncio
 import aiohttp
+import argparse
 from scripts.config import SEASON_ID, MAIN_VERSION
 from scripts.crawler import ERAPIClient
 from scripts.hash_info_parsing import parse_all_meta_files, weapon_type, tactical_type
 from scripts.db_utils import get_engine, save_dataframes_to_db
 from scripts.logger import logger
-from scripts import pipeline 
+from scripts.pipeline import run_pipeline, seed_top_rankers
 import pandas as pd
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy import text
@@ -69,17 +70,29 @@ async def populate_static_tables(client: ERAPIClient):
         logger.error(f"Failed to save meta data to DB: {e}", exc_info=True)
 
 
-async def main():
+async def run_full_process():
+    """
+    전체 수집 프로세스 실행
+    1. 정적 데이터(메타 데이터) 확인 및 보충
+    2. 메인 파이프라인(매치 데이터 수집) 실행
+    """
     async with ERAPIClient() as client:
         # 정적 데이터 테이블이 비어있으면 채우기
         await populate_static_tables(client)
         
-    # 매치 데이터 수집을 위한 파이프라인 실행
-    # seed: 초기 데이터 수집을 위한 상위 랭커 유저 수집
-    # run: 기존 수집된 유저 기반으로 매치 데이터 수집
     logger.info("--- Starting Match Data Collection ---")
-    logger.info("Delegating to pipeline.py. Use 'seed' or 'run' as a command-line argument.")
-    await pipeline.main()
+    await run_pipeline()
+
+
+async def main():
+    parser = argparse.ArgumentParser(description="Eternal Return Data Crawler")
+    parser.add_argument("command", choices=["run", "seed"], default="run", nargs="?", help="Command to execute: 'run' for full pipeline, 'seed' for top rankers only.")
+    args = parser.parse_args()
+
+    if args.command == "seed":
+        await seed_top_rankers()
+    elif args.command == "run":
+        await run_full_process()
 
 if __name__ == "__main__":
     asyncio.run(main())
