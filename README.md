@@ -1,24 +1,23 @@
-# Eternal Return Crawler
-- WIP
+# Eternal Return Crawler & Pipeline
+WIP ~ 
+**이터널 리턴(Eternal Return)** 공식 Open API를 활용한 데이터 수집 파이프라인
+
 ## 주요 기능
 
 -   **데이터 수집**: 이터널 리턴 Open API를 활용하여 매치 데이터 수집
--   **비동기 처리**: `aiohttp`와 `asyncio`를 사용하여 API 요청을 비동기적으로 처리하여 데이터 수집
--   **데이터 파싱 및 저장**: 수집된 원시 데이터를 Pandas DataFrame으로 파싱하고, SQLAlchemy를 통해 MySQL DB에 저장
--   **데이터 관리**: 게임의 정적 데이터(캐릭터, 아이템 등)를 별도로 관리하여 DB에 저장
+-   **데이터 파싱 및 저장**: 수집된 원시 JSON 데이터를 정제하여 MySQL DB에 적재
+-   **오케스트레이션**: Airflow를 이용한 수집 워크플로우 자동화
 
-## 기술 스택 및 프로젝트 구조
+## 🛠 기술 스택
 
-### 기술 스택
-
--   **언어**: `Python` 3.10+
--   **데이터 수집**: `requests`, `aiohttp`
+-   **언어**: `Python 3.10+`
+-   **데이터 수집**: `aiohttp`, `requests`
 -   **데이터 처리**: `pandas`
--   **데이터베이스**: `pymysql`, `SQLAlchemy`
--   **설정 관리**: `python-dotenv`
--   **의존성 관리**: `poetry`
+-   **데이터베이스**: `MySQL 8.0`, `SQLAlchemy`, `Alembic`
+-   **인프라 & 스케줄링**: `Docker`, `Docker Compose`, `Airflow`
+-   **의존성 관리**: `Poetry`
 
-### 프로젝트 구조
+## 📂 프로젝트 구조
 
 ```
 eternal_return_crawler/
@@ -26,106 +25,125 @@ eternal_return_crawler/
 ├── pyproject.toml
 ├── poetry.lock
 ├── README.md
-├── db/
-│   └── schema.sql
-├── scripts/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── pipeline.py
-│   ├── crawler.py
-│   ├── hash_info_parsing.py
-│   ├── match_info_parsing.py
-│   ├── db_utils.py
-│   ├── init_db.py
-│   ├── config.py
-│   └── logger.py
-└── logs/
+├── alembic/               
+├── db/                    # DB 관련 파일 (schema.sql)
+├── dags/                  # Airflow DAG 파일 (Docker 환경용)
+│   ├── er_pipeline.py     # 데이터 수집 파이프라인
+│   └── init_system.py     # 시스템 초기화 파이프라인
+├── scripts/               
+│   ├── main.py            # 로컬 실행
+│   ├── config.py          # 설정 파일
+│   ├── pipeline.py        # 파이프라인 로직
+│   ├── crawler.py         # API 호출
+│   ├── models.py          # DB 모델 정의
+│   ├── db_utils.py        # DB 유틸리티
+│   ├── match_info_parsing.py # 매치 데이터 파싱
+│   └── hash_info_parsing.py # 해싱 데이터 파싱
+│
+├── docs/                  # ERD 및 문서
+├── docker-compose.yml     # Docker 실행 설정
+└── logs/                   
 ```
 
-## 모듈별 역할
+## 데이터베이스 구조
+상세 스키마 설계 및 관계도는 `docs/ERD/s9_erd.vuerd.json` 파일을 통해 확인 가능(Vuerd 등 시각화 도구 사용 권장)
 
--   **`main.py`**: 전체 파이프라인을 실행하는 메인 스크립트입니다. 정적 데이터를 먼저 채운 후, 매치 데이터 수집 파이프라인을 실행
--   **`pipeline.py`**: 데이터 수집, 처리, 저장을 총괄하는 파이프라인입니다. 상위 랭커 목록을 가져오고, 새로운 매치 ID를 필터링한 후, 배치 단위로 매치 데이터를 처리하여 DB에 저장
--   **`crawler.py`**: 이터널 리턴 Open API와 통신하여 데이터를 가져오는 함수와 `aiohttp`를 사용한 비동기 함수 포함
--   **`hash_info_parsing.py`**: 게임의 정적 데이터(캐릭터, 아이템 등)를 파싱
--   **`match_info_parsing.py`**: 매치 상세 데이터를 파싱하여 테이블별 DataFrame으로 변환
--   **`db_utils.py`**: SQLAlchemy를 사용하여 데이터베이스 연결, 데이터 저장, SQL 파일 실행 등 DB 관련 함수
--   **`init_db.py`**: 스키마 파일을 읽어 데이터베이스와 테이블을 초기화 후 생성
--   **`config.py`**: API 키, 데이터베이스 정보, 경로 등 프로젝트의 주요 설정을 관리하는`.env` 파일로부터 환경 변수를 로드
--   **`logger.py`**: 로깅 설정을 담당하여 파일 및 콘솔에 로그를 출력
+---
 
-## 데이터 수집
+## 설정
 
-```mermaid
-graph TD
-    A[Start: Top Rankers] --> B{Existing Matches?}
-    B -- No --> C[Crawl: match_info]
-    C --> D[Extract: All Participants]
-    D --> E[Add to User Queue]
-    E --> F[Crawl: User Match History]
-    F --> G[Extract: match_ids]
-    G --> B
-    C --> H[Parse: match_user_start]
-    C --> I[Parse: combat/damage/object/etc]
-    H --> J[Load: Bulk Insert to MySQL]
-    I --> J
-```
-1.  **Seed 수집**: 상위 랭커 유저들의 매치 기록을 조회하여 초기 `match_id`를 확보
-2.  **스노우볼링**: 수집된 매치에 참여한 모든 유저(`MatchUserStart`)의 `uid`를 추출하여 다음 수집 대상 큐에 추가하여 유저를 수집하고 새로운 매치를 수집
-3.  **데이터 파이프라인**:
-    -   **Crawler**: Open API에서 JSON 응답을 비동기로 수집 (Rate Limit: 50 req/s 준수)
-    -   **Parser**: `match_info_parsing.py`가 거대한 JSON 응답을 테이블별(전투, 데미지, 오브젝트 등) DataFrame으로 분해 및 변환
+어떤 방식으로 실행하든 아래 설정은 공통적으로 진행
 
-## 설치 및 설정
-
-1.  **Poetry 설치**:
+1.  **Poetry 설치 (로컬 실행 시)**
     ```bash
     pip install poetry
-    ```
-
-2.  **의존성 설치**:
-    ```bash
     poetry install
     ```
 
-3.  **`.env` 파일 생성**:
-    프로젝트 루트 디렉토리에 `.env` 파일을 생성하고 아래 내용을 알맞게 력
+2.  **환경 변수(`.env`) 설정**
+    프로젝트 경로에 `.env` 파일을 생성하고 내용을 작성
 
     ```env
     API_KEY="YOUR_ETERNAL_RETURN_API_KEY"
 
-    # DB connection info
-    DB_HOST="localhost"
+    # DB 설정
+    DB_HOST="localhost"   # Docker 사용 시 "mysql"로 변경 고려
     DB_PORT=3306
-    DB_NAME="YOUR_DATABASE_NAME"
+    DB_NAME="erdb"
     DB_USER="root"
-    DB_PASSWORD="YOUR_DATABASE_PASSWORD"
+    DB_PASSWORD="password"
 
-    # Project settings
-    code_root="./eternal_return_crawler" # 프로젝트 루트 경로
+    # Airflow 설정 (Docker 사용 시 필요)
+    AIRFLOW_UID=50000
+
+    # 프로젝트 설정
+    code_root="./eternal_return_crawler"
     season_id=33
     matching_mode=3
-    main_version=7
     region_id=10
     ```
 
-## DB 초기화
+---
 
-다음 스크립트를 실행하여 데이터베이스와 테이블 생성
+## 실행 방법 1: 로컬 실행
 
+가장 간단하게 크롤러를 실행하는 방법입니다. 로컬에 MySQL이 설치되어야 실행 가능
+
+### 1. DB 초기화
+Alembic을 사용하여 최신 스키마를 DB에 적용
 ```bash
-poetry run python scripts/init_db.py
+poetry run alembic upgrade head
 ```
 
-## 사용 방법
-
--   **정적 데이터 채우기**: `main.py`를 실행하면 `populate_static_tables()` 함수가 호출되어, DB에 정적 데이터가 없으면 자동으로 채움
--   **매치 데이터 수집**: `main.py`의 `run_pipeline()` 함수가 매치 데이터 수집
-
-## 실행 방법
-
-프로젝트의 모든 기능을 실행하려면 `main.py`를 실행
-
+### 2. 파이프라인 실행
+`main.py`를 실행하면 정적 데이터 확인 후 매치 수집 파이프라인이 가동
 ```bash
 poetry run python scripts/main.py
+```
+
+---
+
+## 실행 방법 2: Docker & Airflow
+
+프로덕션 환경과 동일하게 **Airflow**를 통해 파이프라인을 스케줄링하고 관리하는 방법 으로 MySQL과 Airflow가 컨테이너로 실행
+
+### 1. 전제 조건
+*   **Docker Desktop**이 설치되어 있고 실행 중
+*   프로젝트 경로에 `.env` 파일 생성
+
+### 2. Docker 환경 구성 및 실행
+터미널에서 프로젝트 경로로 이동한 후 다음 명령어를 입력
+
+```bash
+# 이미지 빌드 및 컨테이너 실행
+docker compose up -d --build
+```
+
+### 3. Airflow 접속 및 DAG 실행
+1.  브라우저에서 `http://localhost:8080` 접속 (ID/PW: `airflow` / `airflow`)
+2.  `init_system` DAG를 먼저 실행하여 DB 초기화
+3.  `er_pipeline` DAG를 활성화하여 데이터 수집 시작
+
+### 4. Docker 종료
+
+
+```bash
+docker compose down
+# 또는
+docker compose stop
+```
+
+---
+
+## 📊 데이터 수집 로직
+
+```mermaid
+graph TD
+    A[Start] --> B{Active Users?}
+    B -- No --> C[Seed: Top Rankers]
+    B -- Yes --> D[Crawl: User Match History]
+    C --> D
+    D --> E[Filter: New Match IDs]
+    E --> F[Parse & Save to DB]
+    F --> G[Update: User Last Match]
 ```
