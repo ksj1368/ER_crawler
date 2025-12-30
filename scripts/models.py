@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, String, Integer, DateTime, Boolean, Float, ForeignKey
+    Column, String, Integer, DateTime, Boolean, Float, ForeignKey, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -9,7 +9,8 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = 'user'
-    uid = Column(String(128), primary_key=True, comment='User Identifier')
+    user_num = Column(Integer, primary_key=True, autoincrement=True, comment='Internal User ID')
+    uid = Column(String(128), unique=True, nullable=False, comment='API User Identifier')
     nickname = Column(String(30), index=True)
     last_match_id = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
@@ -206,7 +207,7 @@ class MatchTeamInfo(Base):
 class MatchUserStart(Base):
     __tablename__ = 'match_user_start'
     match_id = Column(Integer, ForeignKey('match_team_info.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('user.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('user.user_num'), primary_key=True)
     nickname = Column(String(32))
     character_num = Column(Integer)
     language = Column(String(32))
@@ -226,7 +227,7 @@ class MatchUserStart(Base):
 class MatchUserEnd(Base):
     __tablename__ = 'match_user_end'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     victory = Column(Boolean)
     play_time = Column(Integer)
     watch_time = Column(Integer)
@@ -256,7 +257,7 @@ class MatchUserEnd(Base):
 class MatchUserCombat(Base):
     __tablename__ = 'match_user_combat'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     character_level = Column(Integer)
     tactical_skill_level = Column(Integer)
     player_kill = Column(Integer)
@@ -282,14 +283,14 @@ class MatchUserCombat(Base):
 class MatchUserTrait(Base):
     __tablename__ = 'match_user_trait'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     trait_id = Column(Integer, primary_key=True)
-    trait_type = Column(String(16))
+    trait_type = Column(String(16), primary_key=True)
 
 class MatchUserDamage(Base):
     __tablename__ = 'match_user_damage'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     damage_to_player_total = Column(Integer)
     damage_to_player_basic = Column(Integer)
     damage_to_player_skill = Column(Integer)
@@ -323,7 +324,7 @@ class MatchUserDamage(Base):
 class MatchUserEquipment(Base):
     __tablename__ = 'match_user_equipment'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     first_weapon = Column(Integer)
     first_chest = Column(Integer)
     first_head = Column(Integer)
@@ -340,7 +341,7 @@ class MatchUserEquipment(Base):
 class MatchUserStats(Base):
     __tablename__ = 'match_user_stats'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     max_hp = Column(Integer)
     hp_regen = Column(Float)
     attack_power = Column(Integer)
@@ -364,7 +365,7 @@ class MatchUserStats(Base):
 class MatchUserMmr(Base):
     __tablename__ = 'match_user_mmr'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     mmr_before = Column(Integer)
     mmr_after = Column(Integer)
     mmr_gain = Column(Integer)
@@ -375,7 +376,7 @@ class MatchUserMmr(Base):
 class MatchUserSight(Base):
     __tablename__ = 'match_user_sight'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     sight_score = Column(Integer)
     camera_setup = Column(Integer)
     camera_remove = Column(Integer)
@@ -384,20 +385,29 @@ class MatchUserSight(Base):
 
 # --- Long Format Data Tables ---
 
+class CreditAcquisitionSource(Base):
+    __tablename__ = 'credit_acquisition_source'
+    source_id = Column(Integer, primary_key=True, autoincrement=True)
+    source_name = Column(String(64), unique=True)
+
 class MatchUserCreditAcquisitions(Base):
     __tablename__ = 'match_user_credit_acquisitions'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
-    acquisition_source = Column(String(32), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
+    acquisition_source_id = Column(Integer, ForeignKey('credit_acquisition_source.source_id'))
     acquisition_type = Column(String(32))
     credit_amount = Column(Float)
     source_category = Column(String(32))
 
+    source_info = relationship("CreditAcquisitionSource")
+
 class MatchUserCreditExpenditures(Base):
     __tablename__ = 'match_user_credit_expenditures'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
-    expenditure_item = Column(String(32), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
+    expenditure_item = Column(String(32))
     expenditure_type = Column(String(32))
     credit_amount = Column(Integer)
     usage_count = Column(Integer)
@@ -405,15 +415,16 @@ class MatchUserCreditExpenditures(Base):
 class MatchUserCreditTime(Base):
     __tablename__ = 'match_user_credit_time'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     minute = Column(Integer, primary_key=True)
     used_credit = Column(Integer)
     gain_credit = Column(Integer)
 
 class MatchUserObject(Base):
     __tablename__ = 'match_user_object'
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
-    uid = Column(String(128), ForeignKey('match_user_start.uid'), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
     metric_type = Column(String(32))
-    metric_name = Column(String(32), primary_key=True)
+    metric_name = Column(String(32))
     value = Column(Integer)

@@ -22,10 +22,10 @@ with open(URL_JSON_PATH) as f:
 
 BASE_URL = URLS['base_url']
 
-T = TypeVar('T', bound=BaseModel)
+T = TypeVar('T', bound=BaseModel) # Pydantic 모델 타입 변수
 
 class ERAPIClient:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None): # API Key를 인자로 받거나 환경 변수에서 로드
         self.api_key = api_key or os.getenv("API_KEY")
         if not self.api_key:
             raise ValueError("API Key is missing. Set API_KEY env var or pass it to constructor.")
@@ -38,10 +38,12 @@ class ERAPIClient:
         self.limiter = AsyncLimiter(50, 1)  # 50 requests per second
 
     async def __aenter__(self):
+        """ 비동기 컨텍스트 매니저 진입 시 세션 생성 """
         self.session = aiohttp.ClientSession(headers=self.headers)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """ 비동기 컨텍스트 매니저 종료 시 세션 종료 """
         if self.session:
             await self.session.close()
 
@@ -56,10 +58,10 @@ class ERAPIClient:
         """
         재시도 로직과 API 호출 제한량을 포함하여 JSON을 가져오는 내부 메서드.
         """
-        if not self.session:
+        if not self.session: # 세션이 초기화되지 않은 경우
             raise RuntimeError("Client session is not initialized. Use 'async with ERAPIClient() as client:'.")
 
-        for attempt in range(max_retries):
+        for attempt in range(max_retries): # 재시도 루프
             try:
                 async with self.limiter:
                     pass
@@ -99,18 +101,19 @@ class ERAPIClient:
                     delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
                     await asyncio.sleep(delay)
 
-            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e: # 네트워크 오류 재시도
                 delay = initial_delay * (2 ** attempt) + random.uniform(0, 1)
                 logger.warning(f"Network error for url {url}: {e}. Retrying in {delay:.2f}s... (Attempt {attempt+1}/{max_retries})")
                 await asyncio.sleep(delay)
-            except Exception as e:
-                logger.error(f"Unexpected error for url {url}: {e}", exc_info=True)
+            except Exception as e: # 기타 예외 로깅 후 종료
+                logger.error(f"Unexpected error for url {url}: {e}", exc_info=True) 
                 return None
 
         logger.error(f"Failed to fetch after {max_retries} attempts for url: {url}")
         return None
 
     async def get_character(self):
+        """ 실험체 통계 데이터 가져오기 """
         character_url = f"{BASE_URL}{URLS['data']['character']}"
         character_levelup_url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"
         
@@ -122,6 +125,7 @@ class ERAPIClient:
         return None
 
     async def get_equipment(self):
+        """ 장비 데이터 가져오기 """
         url_armor = f"{BASE_URL}{URLS['data']['item_armor']}"
         url_weapon = f"{BASE_URL}{URLS['data']['item_weapon']}"
         
@@ -133,48 +137,48 @@ class ERAPIClient:
         return None
         
     async def get_trait(self) -> dict | None:
+        """ 특성 데이터 가져오기 """
         url = f"{BASE_URL}{URLS['data']['trait']}"
         return await self._fetch_json(url)
         
     async def get_monster(self) -> dict | None:
+        """ 야생동물 및 에픽 몬스터 데이터 가져오기 """
         url = f"{BASE_URL}{URLS['data']['monster']}"    
         return await self._fetch_json(url)
         
     async def get_area(self) -> dict | None:
+        """ 지역 데이터 가져오기 """
         url = f"{BASE_URL}{URLS['data']['area']}"    
         return await self._fetch_json(url)
             
     async def get_char_lv(self) -> dict | None:
+        """ 실험체 레벨업 능력치 데이터 가져오기 """
         url = f"{BASE_URL}{URLS['data']['character_level_up_stat']}"    
         return await self._fetch_json(url)
 
     async def get_l10n(self) -> List[str] | None:
+        """ 텍스트 파일 가져오기(한국어) """
         url = f"{BASE_URL}{URLS['l10n']['korean']}"
         data = await self._fetch_json(url)
-        if data and 'data' in data and 'l10Path' in data['data']:
+        if data and 'data' in data and 'l10Path' in data['data']: # l10Path가 있는 경우
             l10n_url = data['data']['l10Path']
             try:
-                async with self.session.get(l10n_url) as response:
+                async with self.session.get(l10n_url) as response: # 텍스트 파일 직접 요청
                     if response.status == 200:
                         text_content = await response.text()
                         return text_content.splitlines()
-            except Exception as e:
+            except Exception as e: 
                 logger.error(f"get_l10n text file error: {e}")
         return None
 
-    async def get_user_by_nickname(self, nickname: str) -> dict | None:
-        url = f"{BASE_URL}{URLS['user']['nickname']}"
-        data = await self._fetch_json(url, params={'query': nickname})
-        if data and "user" in data:
-            return data["user"]
-        return None
-
     async def get_top_ranker(self, season_id: int, matching_mode: int, server_code: int) -> dict | None:
+        """ 상위 랭커 정보 가져오기 """
         url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
         data = await self._fetch_json(url, response_model=TopRankerResponse)
         return data.model_dump() if data else None
 
     async def fetch_user_by_nickname_async(self, nickname: str) -> Dict[str, Any] | None:
+        """ 닉네임으로 사용자 정보 가져오기 """
         url = f"{BASE_URL}{URLS['user']['nickname']}"
         data = await self._fetch_json(url, params={'query': nickname})
         if data and "user" in data:
@@ -187,29 +191,33 @@ class ERAPIClient:
         return None
 
     async def get_users_by_nickname_async(self, nicknames: List[str]) -> List[Dict[str, Any]]:
+        """ 닉네임 목록으로 사용자 정보 조회 """
         tasks = [self.fetch_user_by_nickname_async(nickname) for nickname in nicknames]
         results = await asyncio.gather(*tasks)
         return [user for user in results if user]
 
     async def fetch_user_games(self, url: str) -> Tuple[int, dict]:
+        """ 사용자 매치 기록 가져오기 """
         data = await self._fetch_json(url, response_model=MatchResponse)
         if data:
             return 200, data.model_dump()
         return 404, None 
 
     async def get_user_games_by_uid_async(self, users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
+        """ 사용자 id(uid)로 매치 기록 조회 """
         async def process_user(user) -> dict:
+            """ 단일 사용자 매치 기록 처리 """
             uid = user['uid']
             last_match_id = user['last_match_id']
             new_match_ids = []
             next_page = None
             
             while True:
-                url = f"{BASE_URL}{URLS['user']['games'].format(uid=uid)}"
-                if next_page:
+                url = f"{BASE_URL}{URLS['user']['games'].format(uid=uid)}" # 사용자 매치 기록 URL
+                if next_page: # 다음 페이지가 있는 경우 다음 페이지 조회
                     url += f"?next={next_page}"
 
-                status, data = await self.fetch_user_games(url)
+                status, data = await self.fetch_user_games(url) # 매치 기록 호출
 
                 if status == 404:
                     return {'uid': uid, 'status': 'deactivated'}
@@ -218,17 +226,17 @@ class ERAPIClient:
                     break 
 
                 stop_crawling = False
-                for game in data["userGames"]:
+                for game in data["userGames"]: # 매치 id 수집
                     if game["gameId"] <= last_match_id:
                         stop_crawling = True
                         break
-                    if game.get("matchingMode") == 3:
+                    if game.get("matchingMode") == 3: # 매치 모드 필터링(Rank 게임만 가져옴)
                         new_match_ids.append(game["gameId"])
                 
-                if stop_crawling or not data.get('next'):
+                if stop_crawling or not data.get('next'): # 다음 페이지가 없으면 종료
                     break
                 
-                next_page = data['next']
+                next_page = data['next'] # 다음 페이지 업데이트
             
             return {'uid': uid, 'status': 'success', 'matches': new_match_ids}
 
@@ -238,11 +246,13 @@ class ERAPIClient:
             yield user_result
 
     async def fetch_match_info(self, match_id: int):
+        """ 단일 매치 정보 가져오기 """
         url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
         data = await self._fetch_json(url, response_model=MatchResponse)
         return match_id, data.model_dump() if data else None
 
     async def get_match_infos_async(self, match_ids: List[int], batch_size: int = 100) -> AsyncGenerator[Tuple[int, Any], None]:
+        """ 매치 id 목록으로 매치 정보 조회 """
         for i in range(0, len(match_ids), batch_size):
             batch = match_ids[i:i + batch_size]
             tasks = [self.fetch_match_info(match_id) for match_id in batch]
@@ -250,8 +260,3 @@ class ERAPIClient:
                 match_id, data = await future
                 if data:
                     yield match_id, data
-
-    async def match_info(self, match_id: int) -> dict | None:
-        url = f"{BASE_URL}{URLS['games']['details'].format(match_id=match_id)}"
-        data = await self._fetch_json(url, response_model=MatchResponse)
-        return data.model_dump() if data else None
