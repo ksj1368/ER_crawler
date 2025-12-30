@@ -28,6 +28,19 @@ def check_match_exists(engine: Engine, match_ids: list[int]) -> set[int]:
         result = conn.execute(stmt)
         return {row[0] for row in result}
 
+def get_user_num_map_by_uids(engine: Engine, uids: List[str]) -> Dict[str, int]:
+    """
+    uid 리스트를 받아 {uid: user_num} 매핑을 반환
+    데이터 적재 전 uid를 내부 ID(user_num)로 변환할 때 사용
+    """
+    if not uids:
+        return {}
+    
+    with engine.connect() as conn:
+        stmt = select(User.uid, User.user_num).where(User.uid.in_(uids))
+        result = conn.execute(stmt)
+        return {row[0]: row[1] for row in result}
+
 def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str]:
     """
     닉네임 리스트를 받아 DB에 존재하는 유저의 {nickname: uid} 맵을 반환
@@ -177,17 +190,18 @@ def execute_sql_file(engine: Engine, file_path: str):
     logger.info(f"Successfully executed SQL script: {file_path}")
 
 def get_active_users(engine: Engine) -> List[Dict[str, Any]]:
-    """is_active가 True인 모든 유저의 uid, nickname, last_match_id를 조회"""
+    """is_active가 True인 모든 유저의 uid, user_num, nickname, last_match_id를 조회"""
     with engine.connect() as conn:
-        stmt = select(User.uid, User.nickname, User.last_match_id).where(User.is_active == True)
+        # user_num 추가 조회
+        stmt = select(User.uid, User.nickname, User.last_match_id, User.user_num).where(User.is_active == True)
         result = conn.execute(stmt)
-        return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2]} for row in result]
+        return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2], 'user_num': row[3]} for row in result]
 
 def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     """
     여러 유저 정보를 Upsert
-    - DB에 없는 uid는 새로 추가
-    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신하고 is_active를 True로 설정
+    - DB에 없는 uid는 새로 추가 (user_num 자동 생성)
+    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신
     """
     if not users_data:
         return
