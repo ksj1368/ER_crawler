@@ -1,0 +1,2125 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dineug/erd-editor/main/json-schema/schema.json",
+  "version": "3.0.0",
+  "settings": {
+    "width": 2000,
+    "height": 2000,
+    "scrollTop": -547.4845,
+    "scrollLeft": -245.1663,
+    "zoomLevel": 0.4,
+    "show": 431,
+    "database": 4,
+    "databaseName": "",
+    "canvasType": "ERD",
+    "language": 1,
+    "tableNameCase": 4,
+    "columnNameCase": 2,
+    "bracketType": 1,
+    "relationshipDataTypeSync": true,
+    "relationshipOptimization": false,
+    "columnOrder": [
+      1,
+      2,
+      4,
+      8,
+      16,
+      32,
+      64
+    ],
+    "maxWidthComment": -1,
+    "ignoreSaveSettings": 0
+  },
+  "doc": {
+    "tableIds": [
+      "user",
+      "match_info",
+      "match_team_info",
+      "match_user_start",
+      "credit_acquisition_source",
+      "match_user_end",
+      "match_user_combat",
+      "match_user_trait",
+      "match_user_damage",
+      "match_user_equipment",
+      "match_user_stats",
+      "match_user_mmr",
+      "match_user_sight",
+      "match_user_credit_acquisitions",
+      "match_user_credit_expenditures",
+      "match_user_credit_time",
+      "match_user_object"
+    ],
+    "relationshipIds": [
+      "fk_match_team_info_match",
+      "fk_match_user_start_team",
+      "fk_match_user_start_user",
+      "fk_match_user_end_match_user",
+      "fk_match_user_combat_match_user",
+      "fk_match_user_trait_match_user",
+      "fk_match_user_damage_match_user",
+      "fk_match_user_equipment_match_user",
+      "fk_match_user_stats_match_user",
+      "fk_match_user_mmr_match_user",
+      "fk_match_user_sight_match_user",
+      "fk_match_user_credit_acquisitions_match_user",
+      "fk_match_user_credit_acquisitions_source",
+      "fk_match_user_credit_expenditures_match_user",
+      "fk_match_user_credit_time_match_user",
+      "fk_match_user_object_match_user"
+    ],
+    "indexIds": [],
+    "memoIds": []
+  },
+  "collections": {
+    "tableEntities": {
+      "user": {
+        "id": "user",
+        "name": "user",
+        "comment": "User Information",
+        "columnIds": [
+          "user_user_num",
+          "user_uid",
+          "user_nickname",
+          "user_last_match_id",
+          "user_is_active",
+          "user_last_updated_at"
+        ],
+        "seqColumnIds": [
+          "user_user_num",
+          "user_uid",
+          "user_nickname",
+          "user_last_match_id",
+          "user_is_active",
+          "user_last_updated_at"
+        ],
+        "ui": {
+          "x": 187.2726,
+          "y": 592.7273,
+          "zIndex": 2,
+          "widthName": 60,
+          "widthComment": 91,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098920430,
+          "createAt": 1703900000000
+        }
+      },
+      "match_info": {
+        "id": "match_info",
+        "name": "match_info",
+        "comment": "Match Basic Info",
+        "columnIds": [
+          "match_match_id",
+          "match_season_id",
+          "match_matching_mode",
+          "match_start_dtm",
+          "match_duration"
+        ],
+        "seqColumnIds": [
+          "match_match_id",
+          "match_season_id",
+          "match_matching_mode",
+          "match_start_dtm",
+          "match_duration"
+        ],
+        "ui": {
+          "x": 1238.1818,
+          "y": 620,
+          "zIndex": 2,
+          "widthName": 60,
+          "widthComment": 89,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098922523,
+          "createAt": 1703900000000
+        }
+      },
+      "match_team_info": {
+        "id": "match_team_info",
+        "name": "match_team_info",
+        "comment": "Team Result",
+        "columnIds": [
+          "team_match_id",
+          "team_team_number",
+          "team_game_rank",
+          "team_team_kill"
+        ],
+        "seqColumnIds": [
+          "team_match_id",
+          "team_team_number",
+          "team_game_rank",
+          "team_team_kill"
+        ],
+        "ui": {
+          "x": 749.0909,
+          "y": 630.9091,
+          "zIndex": 2,
+          "widthName": 92,
+          "widthComment": 65,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098918729,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_start": {
+        "id": "match_user_start",
+        "name": "match_user_start",
+        "comment": "Fact Table (Center)",
+        "columnIds": [
+          "mus_match_id",
+          "mus_user_num",
+          "mus_nickname",
+          "mus_character_num",
+          "mus_team_number"
+        ],
+        "seqColumnIds": [
+          "mus_match_id",
+          "mus_user_num",
+          "mus_nickname",
+          "mus_character_num",
+          "mus_team_number"
+        ],
+        "ui": {
+          "x": 605.4546,
+          "y": 916.3637,
+          "zIndex": 2,
+          "widthName": 91,
+          "widthComment": 99,
+          "color": "#FFCC00"
+        },
+        "meta": {
+          "updateAt": 1767098868185,
+          "createAt": 1703900000000
+        }
+      },
+      "credit_acquisition_source": {
+        "id": "credit_acquisition_source",
+        "name": "credit_acquisition_source",
+        "comment": "Credit Source Normalization",
+        "columnIds": [
+          "cas_source_id",
+          "cas_source_name"
+        ],
+        "seqColumnIds": [
+          "cas_source_id",
+          "cas_source_name"
+        ],
+        "ui": {
+          "x": 1536.3637,
+          "y": 1529.0909,
+          "zIndex": 2,
+          "widthName": 134,
+          "widthComment": 151,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098913765,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_end": {
+        "id": "match_user_end",
+        "name": "match_user_end",
+        "comment": "",
+        "columnIds": [
+          "mue_match_id",
+          "mue_user_num",
+          "mue_victory"
+        ],
+        "seqColumnIds": [
+          "mue_match_id",
+          "mue_user_num",
+          "mue_victory"
+        ],
+        "ui": {
+          "x": 129.0908,
+          "y": 947.2727,
+          "zIndex": 2,
+          "widthName": 87,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098878155,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_combat": {
+        "id": "match_user_combat",
+        "name": "match_user_combat",
+        "comment": "",
+        "columnIds": [
+          "muc_match_id",
+          "muc_user_num",
+          "muc_player_kill"
+        ],
+        "seqColumnIds": [
+          "muc_match_id",
+          "muc_user_num",
+          "muc_player_kill"
+        ],
+        "ui": {
+          "x": 134.5455,
+          "y": 1287.2727,
+          "zIndex": 2,
+          "widthName": 107,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098886741,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_trait": {
+        "id": "match_user_trait",
+        "name": "match_user_trait",
+        "comment": "",
+        "columnIds": [
+          "mut_match_id",
+          "mut_user_num",
+          "mut_trait_id"
+        ],
+        "seqColumnIds": [
+          "mut_match_id",
+          "mut_user_num",
+          "mut_trait_id"
+        ],
+        "ui": {
+          "x": 121.8182,
+          "y": 1114.5455,
+          "zIndex": 2,
+          "widthName": 88,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098884732,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_damage": {
+        "id": "match_user_damage",
+        "name": "match_user_damage",
+        "comment": "",
+        "columnIds": [
+          "mud_match_id",
+          "mud_user_num",
+          "mud_damage_total"
+        ],
+        "seqColumnIds": [
+          "mud_match_id",
+          "mud_user_num",
+          "mud_damage_total"
+        ],
+        "ui": {
+          "x": 1269.0909,
+          "y": 1085.4545,
+          "zIndex": 2,
+          "widthName": 110,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098882225,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_equipment": {
+        "id": "match_user_equipment",
+        "name": "match_user_equipment",
+        "comment": "",
+        "columnIds": [
+          "mueq_match_id",
+          "mueq_user_num",
+          "mueq_weapon"
+        ],
+        "seqColumnIds": [
+          "mueq_match_id",
+          "mueq_user_num",
+          "mueq_weapon"
+        ],
+        "ui": {
+          "x": 1298.1819,
+          "y": 925.4545,
+          "zIndex": 2,
+          "widthName": 125,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098880252,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_stats": {
+        "id": "match_user_stats",
+        "name": "match_user_stats",
+        "comment": "",
+        "columnIds": [
+          "must_match_id",
+          "must_user_num",
+          "must_attack_power"
+        ],
+        "seqColumnIds": [
+          "must_match_id",
+          "must_user_num",
+          "must_attack_power"
+        ],
+        "ui": {
+          "x": 163.6364,
+          "y": 1445.4546,
+          "zIndex": 2,
+          "widthName": 92,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098889323,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_mmr": {
+        "id": "match_user_mmr",
+        "name": "match_user_mmr",
+        "comment": "",
+        "columnIds": [
+          "mumm_match_id",
+          "mumm_user_num",
+          "mumm_mmr_after"
+        ],
+        "seqColumnIds": [
+          "mumm_match_id",
+          "mumm_user_num",
+          "mumm_mmr_after"
+        ],
+        "ui": {
+          "x": 594.5455,
+          "y": 1709.091,
+          "zIndex": 2,
+          "widthName": 92,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098907614,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_sight": {
+        "id": "match_user_sight",
+        "name": "match_user_sight",
+        "comment": "",
+        "columnIds": [
+          "musi_match_id",
+          "musi_user_num",
+          "musi_sight_score"
+        ],
+        "seqColumnIds": [
+          "musi_match_id",
+          "musi_user_num",
+          "musi_sight_score"
+        ],
+        "ui": {
+          "x": 1010.9091,
+          "y": 1630.9091,
+          "zIndex": 2,
+          "widthName": 93,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098910749,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_object": {
+        "id": "match_user_object",
+        "name": "match_user_object",
+        "comment": "",
+        "columnIds": [
+          "muo_match_id",
+          "muo_user_num"
+        ],
+        "seqColumnIds": [
+          "muo_match_id",
+          "muo_user_num"
+        ],
+        "ui": {
+          "x": 1300,
+          "y": 1238.1819,
+          "zIndex": 2,
+          "widthName": 100,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098896034,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_credit_acquisitions": {
+        "id": "match_user_credit_acquisitions",
+        "name": "match_user_credit_acquisitions",
+        "comment": "",
+        "columnIds": [
+          "muca_match_id",
+          "muca_user_num",
+          "muca_source_id"
+        ],
+        "seqColumnIds": [
+          "muca_match_id",
+          "muca_user_num",
+          "muca_source_id"
+        ],
+        "ui": {
+          "x": 1303.6364,
+          "y": 1361.8182,
+          "zIndex": 2,
+          "widthName": 164,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098897660,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_credit_expenditures": {
+        "id": "match_user_credit_expenditures",
+        "name": "match_user_credit_expenditures",
+        "comment": "",
+        "columnIds": [
+          "muce_match_id",
+          "muce_user_num"
+        ],
+        "seqColumnIds": [
+          "muce_match_id",
+          "muce_user_num"
+        ],
+        "ui": {
+          "x": 287.2727,
+          "y": 1601.8182,
+          "zIndex": 2,
+          "widthName": 170,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098891018,
+          "createAt": 1703900000000
+        }
+      },
+      "match_user_credit_time": {
+        "id": "match_user_credit_time",
+        "name": "match_user_credit_time",
+        "comment": "",
+        "columnIds": [
+          "muct_match_id",
+          "muct_user_num"
+        ],
+        "seqColumnIds": [
+          "muct_match_id",
+          "muct_user_num"
+        ],
+        "ui": {
+          "x": 1050,
+          "y": 1478.1818,
+          "zIndex": 2,
+          "widthName": 126,
+          "widthComment": 60,
+          "color": ""
+        },
+        "meta": {
+          "updateAt": 1767098909549,
+          "createAt": 1703900000000
+        }
+      }
+    },
+    "tableColumnEntities": {
+      "user_user_num": {
+        "id": "user_user_num",
+        "tableId": "user",
+        "name": "user_num",
+        "comment": "Internal User ID",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 60,
+          "widthComment": 84,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "user_uid": {
+        "id": "user_uid",
+        "tableId": "user",
+        "name": "uid",
+        "comment": "API User Identifier",
+        "dataType": "VARCHAR(128)",
+        "default": "",
+        "options": 4,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 97,
+          "widthDataType": 81,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "user_nickname": {
+        "id": "user_nickname",
+        "tableId": "user",
+        "name": "nickname",
+        "comment": "",
+        "dataType": "VARCHAR(30)",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 75,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "user_last_match_id": {
+        "id": "user_last_match_id",
+        "tableId": "user",
+        "name": "last_match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "0",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 73,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "user_is_active": {
+        "id": "user_is_active",
+        "tableId": "user",
+        "name": "is_active",
+        "comment": "",
+        "dataType": "BOOLEAN",
+        "default": "True",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "user_last_updated_at": {
+        "id": "user_last_updated_at",
+        "tableId": "user",
+        "name": "last_updated_at",
+        "comment": "",
+        "dataType": "DATETIME",
+        "default": "now()",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 85,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "match_match_id": {
+        "id": "match_match_id",
+        "tableId": "match_info",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "match_season_id": {
+        "id": "match_season_id",
+        "tableId": "match_info",
+        "name": "season_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "match_matching_mode": {
+        "id": "match_matching_mode",
+        "tableId": "match_info",
+        "name": "matching_mode",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 87,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "match_start_dtm": {
+        "id": "match_start_dtm",
+        "tableId": "match_info",
+        "name": "start_dtm",
+        "comment": "",
+        "dataType": "DATETIME",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "match_duration": {
+        "id": "match_duration",
+        "tableId": "match_info",
+        "name": "duration",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "team_match_id": {
+        "id": "team_match_id",
+        "tableId": "match_team_info",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "team_team_number": {
+        "id": "team_team_number",
+        "tableId": "match_team_info",
+        "name": "team_number",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 75,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "team_game_rank": {
+        "id": "team_game_rank",
+        "tableId": "match_team_info",
+        "name": "game_rank",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "team_team_kill": {
+        "id": "team_team_kill",
+        "tableId": "match_team_info",
+        "name": "team_kill",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mus_match_id": {
+        "id": "mus_match_id",
+        "tableId": "match_user_start",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mus_user_num": {
+        "id": "mus_user_num",
+        "tableId": "match_user_start",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mus_nickname": {
+        "id": "mus_nickname",
+        "tableId": "match_user_start",
+        "name": "nickname",
+        "comment": "",
+        "dataType": "VARCHAR(32)",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 75,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mus_character_num": {
+        "id": "mus_character_num",
+        "tableId": "match_user_start",
+        "name": "character_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 80,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mus_team_number": {
+        "id": "mus_team_number",
+        "tableId": "match_user_start",
+        "name": "team_number",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 2,
+          "widthName": 75,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "cas_source_id": {
+        "id": "cas_source_id",
+        "tableId": "credit_acquisition_source",
+        "name": "source_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "cas_source_name": {
+        "id": "cas_source_name",
+        "tableId": "credit_acquisition_source",
+        "name": "source_name",
+        "comment": "",
+        "dataType": "VARCHAR(64)",
+        "default": "",
+        "options": 4,
+        "ui": {
+          "keys": 0,
+          "widthName": 71,
+          "widthComment": 60,
+          "widthDataType": 75,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mue_match_id": {
+        "id": "mue_match_id",
+        "tableId": "match_user_end",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mue_user_num": {
+        "id": "mue_user_num",
+        "tableId": "match_user_end",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mue_victory": {
+        "id": "mue_victory",
+        "tableId": "match_user_end",
+        "name": "victory",
+        "comment": "",
+        "dataType": "BOOLEAN",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muc_match_id": {
+        "id": "muc_match_id",
+        "tableId": "match_user_combat",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muc_user_num": {
+        "id": "muc_user_num",
+        "tableId": "match_user_combat",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muc_player_kill": {
+        "id": "muc_player_kill",
+        "tableId": "match_user_combat",
+        "name": "player_kill",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mut_match_id": {
+        "id": "mut_match_id",
+        "tableId": "match_user_trait",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mut_user_num": {
+        "id": "mut_user_num",
+        "tableId": "match_user_trait",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mut_trait_id": {
+        "id": "mut_trait_id",
+        "tableId": "match_user_trait",
+        "name": "trait_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 1,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mud_match_id": {
+        "id": "mud_match_id",
+        "tableId": "match_user_damage",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mud_user_num": {
+        "id": "mud_user_num",
+        "tableId": "match_user_damage",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mud_damage_total": {
+        "id": "mud_damage_total",
+        "tableId": "match_user_damage",
+        "name": "damage_to_player_total",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 127,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mueq_match_id": {
+        "id": "mueq_match_id",
+        "tableId": "match_user_equipment",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mueq_user_num": {
+        "id": "mueq_user_num",
+        "tableId": "match_user_equipment",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mueq_weapon": {
+        "id": "mueq_weapon",
+        "tableId": "match_user_equipment",
+        "name": "best_weapon",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 71,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "must_match_id": {
+        "id": "must_match_id",
+        "tableId": "match_user_stats",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "must_user_num": {
+        "id": "must_user_num",
+        "tableId": "match_user_stats",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "must_attack_power": {
+        "id": "must_attack_power",
+        "tableId": "match_user_stats",
+        "name": "attack_power",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 72,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mumm_match_id": {
+        "id": "mumm_match_id",
+        "tableId": "match_user_mmr",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mumm_user_num": {
+        "id": "mumm_user_num",
+        "tableId": "match_user_mmr",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "mumm_mmr_after": {
+        "id": "mumm_mmr_after",
+        "tableId": "match_user_mmr",
+        "name": "mmr_after",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "musi_match_id": {
+        "id": "musi_match_id",
+        "tableId": "match_user_sight",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "musi_user_num": {
+        "id": "musi_user_num",
+        "tableId": "match_user_sight",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "musi_sight_score": {
+        "id": "musi_sight_score",
+        "tableId": "match_user_sight",
+        "name": "sight_score",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 0,
+        "ui": {
+          "keys": 0,
+          "widthName": 61,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muca_match_id": {
+        "id": "muca_match_id",
+        "tableId": "match_user_credit_acquisitions",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muca_user_num": {
+        "id": "muca_user_num",
+        "tableId": "match_user_credit_acquisitions",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muca_source_id": {
+        "id": "muca_source_id",
+        "tableId": "match_user_credit_acquisitions",
+        "name": "acquisition_source_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 114,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muce_match_id": {
+        "id": "muce_match_id",
+        "tableId": "match_user_credit_expenditures",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muce_user_num": {
+        "id": "muce_user_num",
+        "tableId": "match_user_credit_expenditures",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muct_match_id": {
+        "id": "muct_match_id",
+        "tableId": "match_user_credit_time",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muct_user_num": {
+        "id": "muct_user_num",
+        "tableId": "match_user_credit_time",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muo_match_id": {
+        "id": "muo_match_id",
+        "tableId": "match_user_object",
+        "name": "match_id",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      },
+      "muo_user_num": {
+        "id": "muo_user_num",
+        "tableId": "match_user_object",
+        "name": "user_num",
+        "comment": "",
+        "dataType": "INT",
+        "default": "",
+        "options": 10,
+        "ui": {
+          "keys": 3,
+          "widthName": 60,
+          "widthComment": 60,
+          "widthDataType": 60,
+          "widthDefault": 60
+        },
+        "meta": {
+          "updateAt": 1767098848575,
+          "createAt": 1767098848575
+        }
+      }
+    },
+    "relationshipEntities": {
+      "fk_match_team_info_match": {
+        "id": "fk_match_team_info_match",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_info",
+          "columnIds": [
+            "match_match_id"
+          ],
+          "x": 1238.1818,
+          "y": 708,
+          "direction": 1
+        },
+        "end": {
+          "tableId": "match_team_info",
+          "columnIds": [
+            "team_match_id"
+          ],
+          "x": 1129.0909000000001,
+          "y": 706.9091,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_start_team": {
+        "id": "fk_match_user_start_team",
+        "identification": false,
+        "relationshipType": 4,
+        "startRelationshipType": 1,
+        "start": {
+          "tableId": "match_team_info",
+          "columnIds": [
+            "team_match_id",
+            "team_team_number"
+          ],
+          "x": 939.0909,
+          "y": 782.9091,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_team_number"
+          ],
+          "x": 905.4546,
+          "y": 916.3637,
+          "direction": 4
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_start_user": {
+        "id": "fk_match_user_start_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "user",
+          "columnIds": [
+            "user_user_num"
+          ],
+          "x": 635.2726,
+          "y": 692.7273,
+          "direction": 2
+        },
+        "end": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_user_num"
+          ],
+          "x": 705.4546,
+          "y": 916.3637,
+          "direction": 4
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_end_match_user": {
+        "id": "fk_match_user_end_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 605.4546,
+          "y": 945.6970333333333,
+          "direction": 1
+        },
+        "end": {
+          "tableId": "match_user_end",
+          "columnIds": [
+            "mue_match_id",
+            "mue_user_num"
+          ],
+          "x": 494.0908,
+          "y": 1011.2727,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_combat_match_user": {
+        "id": "fk_match_user_combat_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 605.4546,
+          "y": 1063.0303666666666,
+          "direction": 1
+        },
+        "end": {
+          "tableId": "match_user_combat",
+          "columnIds": [
+            "muc_match_id",
+            "muc_user_num"
+          ],
+          "x": 499.5455,
+          "y": 1351.2727,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_trait_match_user": {
+        "id": "fk_match_user_trait_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 605.4546,
+          "y": 1004.3636999999999,
+          "direction": 1
+        },
+        "end": {
+          "tableId": "match_user_trait",
+          "columnIds": [
+            "mut_match_id",
+            "mut_user_num"
+          ],
+          "x": 486.8182,
+          "y": 1178.5455,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_damage_match_user": {
+        "id": "fk_match_user_damage_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 1005.4546,
+          "y": 982.3637,
+          "direction": 2
+        },
+        "end": {
+          "tableId": "match_user_damage",
+          "columnIds": [
+            "mud_match_id",
+            "mud_user_num"
+          ],
+          "x": 1269.0909,
+          "y": 1149.4545,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_equipment_match_user": {
+        "id": "fk_match_user_equipment_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 1005.4546,
+          "y": 938.3637,
+          "direction": 2
+        },
+        "end": {
+          "tableId": "match_user_equipment",
+          "columnIds": [
+            "mueq_match_id",
+            "mueq_user_num"
+          ],
+          "x": 1298.1819,
+          "y": 989.4545,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_stats_match_user": {
+        "id": "fk_match_user_stats_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 645.4546,
+          "y": 1092.3636999999999,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_stats",
+          "columnIds": [
+            "must_match_id",
+            "must_user_num"
+          ],
+          "x": 540.6364,
+          "y": 1509.4546,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_mmr_match_user": {
+        "id": "fk_match_user_mmr_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 805.4546,
+          "y": 1092.3636999999999,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_mmr",
+          "columnIds": [
+            "mumm_match_id",
+            "mumm_user_num"
+          ],
+          "x": 777.0455,
+          "y": 1709.091,
+          "direction": 4
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_sight_match_user": {
+        "id": "fk_match_user_sight_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 885.4546,
+          "y": 1092.3636999999999,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_sight",
+          "columnIds": [
+            "musi_match_id",
+            "musi_user_num"
+          ],
+          "x": 1010.9091,
+          "y": 1694.9091,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_credit_acquisitions_match_user": {
+        "id": "fk_match_user_credit_acquisitions_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 1005.4546,
+          "y": 1070.3636999999999,
+          "direction": 2
+        },
+        "end": {
+          "tableId": "match_user_credit_acquisitions",
+          "columnIds": [
+            "muca_match_id",
+            "muca_user_num"
+          ],
+          "x": 1303.6364,
+          "y": 1425.8182,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_credit_acquisitions_source": {
+        "id": "fk_match_user_credit_acquisitions_source",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "credit_acquisition_source",
+          "columnIds": [
+            "cas_source_id"
+          ],
+          "x": 1536.3637,
+          "y": 1581.0909,
+          "direction": 1
+        },
+        "end": {
+          "tableId": "match_user_credit_acquisitions",
+          "columnIds": [
+            "muca_source_id"
+          ],
+          "x": 1513.1364,
+          "y": 1489.8182,
+          "direction": 8
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_credit_expenditures_match_user": {
+        "id": "fk_match_user_credit_expenditures_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 725.4546,
+          "y": 1092.3636999999999,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_credit_expenditures",
+          "columnIds": [
+            "muce_match_id",
+            "muce_user_num"
+          ],
+          "x": 652.2727,
+          "y": 1653.8182,
+          "direction": 2
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_credit_time_match_user": {
+        "id": "fk_match_user_credit_time_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 965.4546,
+          "y": 1092.3636999999999,
+          "direction": 8
+        },
+        "end": {
+          "tableId": "match_user_credit_time",
+          "columnIds": [
+            "muct_match_id",
+            "muct_user_num"
+          ],
+          "x": 1050,
+          "y": 1530.1818,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      },
+      "fk_match_user_object_match_user": {
+        "id": "fk_match_user_object_match_user",
+        "identification": true,
+        "relationshipType": 4,
+        "startRelationshipType": 2,
+        "start": {
+          "tableId": "match_user_start",
+          "columnIds": [
+            "mus_match_id",
+            "mus_user_num"
+          ],
+          "x": 1005.4546,
+          "y": 1026.3636999999999,
+          "direction": 2
+        },
+        "end": {
+          "tableId": "match_user_object",
+          "columnIds": [
+            "muo_match_id",
+            "muo_user_num"
+          ],
+          "x": 1300,
+          "y": 1290.1819,
+          "direction": 1
+        },
+        "meta": {
+          "updateAt": 1703900000000,
+          "createAt": 1703900000000
+        }
+      }
+    },
+    "indexEntities": {},
+    "indexColumnEntities": {},
+    "memoEntities": {}
+  }
+}
