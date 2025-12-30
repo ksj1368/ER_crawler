@@ -8,7 +8,11 @@ import pandas as pd
 
 from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID
 from scripts.crawler import ERAPIClient
-from scripts.db_utils import get_engine, deactivate_user, get_active_users, upsert_users, update_user_last_match_bulk, save_dataframes_to_db, check_match_exists, get_uids_by_nicknames
+from scripts.db_utils import (
+    get_engine, deactivate_user, get_active_users, upsert_users, 
+    update_user_last_match_bulk, save_dataframes_to_db, check_match_exists, 
+    get_uids_by_nicknames, get_user_num_map_by_uids
+)
 from scripts.match_info_parsing import top_ranker_nicknames, parse_match_data
 from scripts.logger import logger
 
@@ -174,7 +178,7 @@ async def run_pipeline():
                 except Exception as e:
                     logger.error(f"Failed to save raw data to data lake: {e}")
 
-            # UID 조회 로직(DB 우선 조회)
+            # uid 조회 로직(DB 우선 조회)
             all_nicknames_list = list(batch_participant_nicknames)
             existing_users_map = get_uids_by_nicknames(engine, all_nicknames_list)
             unknown_nicknames = [nick for nick in all_nicknames_list if nick not in existing_users_map]
@@ -217,11 +221,36 @@ async def run_pipeline():
                 unique_participants = list({p['uid']: p for p in all_new_participants}.values())
                 upsert_users(engine, unique_participants)
 
+            # 현재 배치의 모든 유저 uid 수집
+            batch_uids = set()
+            for _, raw_data in raw_match_data_list:
+                if 'userGames' in raw_data:
+                    for user_game in raw_data['userGames']:
+                        if 'uid' in user_game:
+                            batch_uids.add(user_game['uid'])
+            
+            uid_to_user_num = get_user_num_map_by_uids(engine, list(batch_uids))
+
             # 매치 데이터 저장
             if all_parsed_data:
                 combined_data = {}
                 for parsed_data in all_parsed_data:
                     for table_name, df in parsed_data.items():
+                        
+                        if 'uid' in df.columns:
+                            # 매핑 적용
+                            df['user_num'] = df['uid'].map(uid_to_user_num)
+                            
+                            # 매핑 실패한 행 처리 (로깅 후 제거)
+                            if df['user_num'].isnull().any():
+                                missing_count = df['user_num'].isnull().sum()
+                                logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
+                                df.dropna(subset=['user_num'], inplace=True)
+                            
+                            # 타입 변환 및 uid 제거
+                            df['user_num'] = df['user_num'].astype(int)
+                            df.drop(columns=['uid'], inplace=True)
+
                         if table_name not in combined_data:
                             combined_data[table_name] = []
                         combined_data[table_name].append(df)
