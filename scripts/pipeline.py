@@ -6,8 +6,9 @@ from time import time
 from datetime import datetime
 import pandas as pd
 
-from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID
+from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV
 from scripts.crawler import ERAPIClient
+from scripts.storage import get_storage
 from scripts.db_utils import (
     get_engine, deactivate_user, get_active_users, upsert_users, 
     update_user_last_match_bulk, save_dataframes_to_db, check_match_exists, 
@@ -67,6 +68,9 @@ async def run_pipeline():
     pipeline_start_time = time()
     logger.info("--- Start Pipeline ---")
     log_memory()
+    
+    # 스토리지 및 DB 초기화
+    storage = get_storage(ENV)
     engine = get_engine()
 
     # 1. 활성 유저 확인
@@ -160,23 +164,19 @@ async def run_pipeline():
                     for user in raw_data['userGames']:
                         batch_participant_nicknames.add(user['nickname'])
             
-            # 원본 매치테이터를 데이터 레이크에 저장
+            # 원본 매치데이터를 데이터 레이크에 저장
             if raw_match_data_list:
-                import json
-                from pathlib import Path
-                
-                raw_dir = Path("data/raw")
-                raw_dir.mkdir(parents=True, exist_ok=True)
-                
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = raw_dir / f"batch_{i}_{timestamp}.json"
+                # 저장 경로 (S3 Key 또는 로컬 경로)
+                # 예: data/raw/20231027/batch_0_123456.json 형태로 저장
+                date_str = datetime.now().strftime("%Y%m%d")
+                filename = f"data/raw/{date_str}/batch_{i}_{timestamp}.json"
                 
-                try:
-                    with open(filename, 'w', encoding='utf-8') as f:
-                        json.dump([data for _, data in raw_match_data_list], f, ensure_ascii=False)
-                    logger.info(f"Saved raw batch data to {filename}")
-                except Exception as e:
-                    logger.error(f"Failed to save raw data to data lake: {e}")
+                # 저장 데이터 준비
+                data_to_save = [data for _, data in raw_match_data_list]
+                
+                # 스토리지 추상화를 통해 저장
+                storage.save(data_to_save, filename)
 
             # uid 조회 로직(DB 우선 조회)
             all_nicknames_list = list(batch_participant_nicknames)
