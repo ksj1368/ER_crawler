@@ -57,7 +57,7 @@ class S3Storage(DataStorage):
             json_data = json.dumps(data, ensure_ascii=False)
             
             # S3 업로드 (Windows 경로 구분자 역슬래시를 슬래시로 변경)
-            s3_key = path.replace("\", "/")
+            s3_key = path.replace("\\", "/")
             
             self.s3_client.put_object(
                 Bucket=self.bucket_name,
