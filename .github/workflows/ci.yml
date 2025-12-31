@@ -1,0 +1,64 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: erdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Configure poetry
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+
+    - name: Install dependencies
+      run: poetry install --no-interaction --no-root
+
+    - name: Initialize DB
+      env:
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_USER: root
+        DB_PASSWORD: password
+        DB_NAME: erdb
+        code_root: .
+        API_KEY: "dummy_key" # Test doesn't hit real API
+      run: |
+        poetry run python scripts/init_db.py
+
+    - name: Run Tests (Schema & Import Check)
+      run: |
+        # Basic check to ensure scripts are importable and schema is valid
+        poetry run python -c "from scripts.models import Base; print('Models imported successfully')"
+        poetry run python -c "from scripts.schemas import UserBase; print('Schemas imported successfully')"
