@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  er_mysql:
+    image: mysql:8.0
+    container_name: er_mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-erdb}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  airflow-webserver:
+    environment:
+      ENV: dev
+      DB_HOST: er_mysql
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+    depends_on:
+      er_mysql:
+        condition: service_healthy
+
+  airflow-scheduler:
+    environment:
+      ENV: dev
+      DB_HOST: er_mysql
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+    depends_on:
+      er_mysql:
+        condition: service_healthy
+
+  airflow-init:
+    environment:
+      ENV: dev
+      DB_HOST: er_mysql
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+    depends_on:
+      er_mysql:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
