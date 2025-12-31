@@ -10,6 +10,15 @@ load_dotenv(dotenv_path=env_path)
 # API Settings
 API_KEY = os.getenv("API_KEY")
 
+# Environment Settings
+ENV = os.getenv("ENV", "dev")  # dev, prod
+
+# AWS Settings (for prod)
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION", "ap-northeast-2")
+AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET")
+
 # Version Settings
 SEASON_ID = int(os.getenv("season_id", 35))
 MATCHING_MODE = int(os.getenv("matching_mode", 3))
@@ -28,14 +37,26 @@ OBJECT_METRICS_PATH = MAPPING_ROOT / "object_metrics.json"
 GAME_METADATA_PATH = MAPPING_ROOT / "game_metadata.json"
 
 # DB Settings
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", 3306))
-DB_NAME = os.getenv("DB_NAME", "erdb")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+if ENV == "prod":
+    DB_HOST = os.getenv("DB_HOST")
+    DB_PORT = int(os.getenv("DB_PORT", 3306))
+    DB_NAME = os.getenv("DB_NAME", "erdb")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+else:
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = int(os.getenv("DB_PORT", 3306))
+    DB_NAME = os.getenv("DB_NAME", "erdb")
+    DB_USER = os.getenv("DB_USER", "root")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # SQLAlchemy Connection URL
-DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+if DB_USER and DB_PASSWORD and DB_HOST:
+    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
+else:
+    DATABASE_URL = None
+    if ENV == "prod":
+        print("CRITICAL WARNING: Database credentials missing in production environment!")
 
 # Logging
 LOG_PATH.mkdir(parents=True, exist_ok=True)
