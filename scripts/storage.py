@@ -44,12 +44,15 @@ class S3Storage(DataStorage):
     
     def __init__(self, bucket_name: str, aws_access_key: str = None, aws_secret_key: str = None, region_name: str = "ap-northeast-2"):
         self.bucket_name = bucket_name
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            region_name=region_name
-        )
+        
+        # 자격 증명이 제공된 경우에만 인자로 전달
+        client_kwargs = {'region_name': region_name}
+        if aws_access_key:
+            client_kwargs['aws_access_key_id'] = aws_access_key
+        if aws_secret_key:
+            client_kwargs['aws_secret_access_key'] = aws_secret_key
+            
+        self.s3_client = boto3.client('s3', **client_kwargs)
         
     def save(self, data: Any, path: str) -> bool:
         try:
