@@ -207,3 +207,6 @@ logs/
 
 ### gemini CLI prompts ###
 gemini.md
+
+### SSL certificates ###
+*.pem
