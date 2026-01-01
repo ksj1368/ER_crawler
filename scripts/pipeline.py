@@ -166,10 +166,11 @@ async def run_pipeline():
             
             # 원본 매치데이터를 데이터 레이크에 저장
             if raw_match_data_list:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                now = datetime.now()
+                timestamp = now.strftime("%Y%m%d_%H%M%S")
                 # 저장 경로 (S3 Key 또는 로컬 경로)
                 # 예: data/raw/20231027/batch_0_123456.json 형태로 저장
-                date_str = datetime.now().strftime("%Y%m%d")
+                date_str = now.strftime("%Y%m%d")
                 filename = f"data/raw/{date_str}/batch_{i}_{timestamp}.json"
                 
                 # 저장 데이터 준비
