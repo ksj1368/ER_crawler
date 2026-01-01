@@ -43,23 +43,27 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.REMOTE_SSH_PORT }}
           script: |
-            # 디렉토리 확인 및 클론
+            # 1. 디렉토리 확인 및 클론 (Token 사용 인증)
+            # 형식: https://사용자명:토큰@github.com/아이디/리포지토리.git
             if [ ! -d "/home/${{ secrets.EC2_USER }}/eternal_return_crawler" ]; then
-              git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.EC2_USER }}/eternal_return_crawler
+              git clone https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git /home/${{ secrets.EC2_USER }}/eternal_return_crawler
             fi
             
             cd /home/${{ secrets.EC2_USER }}/eternal_return_crawler
             
-            # 소스 코드 동기화
+            # 2. 소스 코드 동기화
+            # origin URL을 토큰이 포함된 URL로 업데이트 (기존 인증 정보 덮어쓰기)
+            git remote set-url origin https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
             git reset --hard origin/infra/cloud-deployment
             git pull origin infra/cloud-deployment
             
-            # 컨테이너 재구동
-            docker-compose down
-            docker-compose up -d --build
+            # 3. Docker Compose 실행 (최신 버전은 하이픈(-) 없는 'docker compose' 사용)
+            # '|| true'는 컨테이너가 없어서 에러가 나도 스크립트가 멈추지 않게 함
+            docker compose down || true
+            docker compose up -d --build
             
-            # 미사용 이미지 삭제
+            # 4. 미사용 이미지 삭제
             docker image prune -f
 
       # 5. 보안 그룹에서 IP 삭제 (성공/실패 여부 상관없이 항상 실행)
