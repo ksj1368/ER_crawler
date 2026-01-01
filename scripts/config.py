@@ -37,16 +37,14 @@ OBJECT_METRICS_PATH = MAPPING_ROOT / "object_metrics.json"
 GAME_METADATA_PATH = MAPPING_ROOT / "game_metadata.json"
 
 # DB Settings
+DB_PORT = int(os.getenv("DB_PORT", 3306))
+DB_NAME = os.getenv("DB_NAME", "erdb")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 if ENV == "prod":
     DB_HOST = os.getenv("DB_HOST")
-    DB_PORT = int(os.getenv("DB_PORT", 3306))
-    DB_NAME = os.getenv("DB_NAME", "erdb")
     DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
 else:
     DB_HOST = os.getenv("DB_HOST", "localhost")
-    DB_PORT = int(os.getenv("DB_PORT", 3306))
-    DB_NAME = os.getenv("DB_NAME", "erdb")
     DB_USER = os.getenv("DB_USER", "root")
     DB_PASSWORD = os.getenv("DB_PASSWORD")
 
