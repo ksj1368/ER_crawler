@@ -76,8 +76,7 @@ def get_storage(env: str = "dev") -> DataStorage:
     if env == "prod":
         bucket_name = os.getenv("AWS_S3_BUCKET")
         if not bucket_name:
-            logger.warning("AWS_S3_BUCKET is not set. Falling back to LocalStorage.")
-            return LocalStorage()
+            raise ValueError("AWS_S3_BUCKET environment variable must be set in production.")
             
         return S3Storage(
             bucket_name=bucket_name,
