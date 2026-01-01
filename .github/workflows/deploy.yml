@@ -3,7 +3,9 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - main  # [변경] main 브랜치에 푸시될 때 배포 실행
+      - main
+  # 수동 배포 트리거
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,12 +14,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 1. 현재 Runner의 공인 IP 가져오기
       - name: Get GitHub Actions Runner IP
         id: ip
         uses: haythem/public-ip@v1.3
 
-      # 2. AWS 자격 증명 설정
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -25,7 +25,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. 보안 그룹에 현재 Runner IP 허용
       - name: Add GitHub Actions IP to Security Group
         run: |
           aws ec2 authorize-security-group-ingress \
@@ -34,7 +33,6 @@ jobs:
             --port ${{ secrets.REMOTE_SSH_PORT }} \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32
 
-      # 4. 기존 배포 로직 (SSH 접속)
       - name: Deploy to EC2 using SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -43,25 +41,32 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.REMOTE_SSH_PORT }}
           script: |
+            # 에러 발생 시 즉시 중단
+            set -e
+
             PROJECT_DIR="/home/${{ secrets.EC2_USER }}/eternal_return_crawler"
             
-            # 1. 디렉토리 확인 및 클론
+            # 1. 디렉토리 확인 및 클론 (토큰 인증 방식 적용)
             if [ ! -d "$PROJECT_DIR" ]; then
-              git clone https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git $PROJECT_DIR
+              git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git $PROJECT_DIR
             fi
             
             cd $PROJECT_DIR
             
-            # 2. 소스 코드 동기화
-            git remote set-url origin https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
+            # 2. 소스 코드 동기화 (현재 배포하려는 브랜치 기준)
+            git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
             
-            # [변경] main 브랜치로 전환 및 강제 동기화
-            git checkout main
-            git reset --hard origin/main
-            git pull origin main
+            # 배포를 유발한 브랜치(main 또는 feature)로 체크아웃
+            TARGET_BRANCH="${{ github.ref_name }}"
+            echo "Checking out branch: $TARGET_BRANCH"
+            
+            git checkout $TARGET_BRANCH
+            git reset --hard origin/$TARGET_BRANCH
+            git pull origin $TARGET_BRANCH
 
-            # 3. 환경 변수 파일(.env) 생성 - Prod 모드 설정
+            # 3. 환경 변수 파일 생성
+            # (테스트 브랜치일 경우를 대비해 MODE 변수 활용 가능, 현재는 Prod 환경변수 주입)
             cat <<EOF > .env
             ENV=prod
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -76,14 +81,39 @@ jobs:
             API_KEY=${{ secrets.API_KEY }}
             EOF
             
-            # 4. Docker Compose 실행
-            docker compose down || true
-            docker compose up -d --build
+            # ----------------------------------------------------------------
+            # 4. 분기 처리 로직 (Main vs Test)
+            # ----------------------------------------------------------------
             
-            # 5. 미사용 이미지 삭제
-            docker image prune -f
+            # Docker 명령어 호환성 함수 정의
+            function docker_compose_cmd() {
+                if command -v docker-compose >/dev/null 2>&1; then
+                    sudo docker-compose "$@"
+                else
+                    sudo docker compose "$@"
+                fi
+            }
 
-      # 5. 보안 그룹에서 IP 삭제
+            if [ "$TARGET_BRANCH" == "main" ]; then
+                echo "[PRODUCTION] Main Branch Detected: Starting Crawler..."
+                
+                # 기존 컨테이너 종료 (에러 무시)
+                docker_compose_cmd down || true
+                
+                # 실행 및 데이터 수집 시작 (Up)
+                docker_compose_cmd up -d --build
+                
+            else
+                echo "[TEST] Feature Branch Detected: Verifying Build Only..."
+                echo "No data will be collected. Containers will NOT start."
+                
+                # 실행하지 않고 빌드만 수행 (Build Only)
+                docker_compose_cmd build
+            fi
+            
+            # 이미지 정리
+            sudo docker image prune -f
+
       - name: Remove GitHub Actions IP from Security Group
         if: always() 
         run: |
