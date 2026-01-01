@@ -27,6 +27,9 @@ class LocalStorage(DataStorage):
         
     def save(self, data: Any, path: str) -> bool:
         try:
+            if Path(path).is_absolute():
+                logger.error(f"[LocalStorage] Absolute paths are not allowed: {path}")
+                return False
             full_path = self.root_dir / path
             full_path.parent.mkdir(parents=True, exist_ok=True)
             
