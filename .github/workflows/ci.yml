@@ -32,6 +32,7 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.10"
+        cache: 'poetry'
 
     - name: Install Poetry
       run: |
@@ -48,19 +49,20 @@ jobs:
     - name: Initialize DB
       env:
         PYTHONPATH: ${{ github.workspace }}
+        ENV: dev
         DB_HOST: 127.0.0.1
         DB_PORT: 3306
         DB_USER: root
         DB_PASSWORD: password
         DB_NAME: erdb
         code_root: .
-        API_KEY: "dummy_key" # Test doesn't hit real API
       run: |
         poetry run python scripts/init_db.py
 
     - name: Run Tests (Schema & Import Check)
       env:
         PYTHONPATH: ${{ github.workspace }}
+        ENV: dev
       run: |
         # Basic check to ensure scripts are importable and schema is valid
         poetry run python -c "from scripts.models import Base; print('Models imported successfully')"

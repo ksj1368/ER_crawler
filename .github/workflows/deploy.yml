@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - infra/cloud-deployment  # 이 브랜치에 푸시될 때만 실행 (main으로 변경 가능)
+      - infra/cloud-deployment
 
 jobs:
   deploy:
@@ -12,36 +12,63 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 1. 현재 Runner의 공인 IP 가져오기
+      - name: Get GitHub Actions Runner IP
+        id: ip
+        uses: haythem/public-ip@v1.3
+
+      # 2. AWS 자격 증명 설정
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }} # 예: ap-northeast-2
+
+      # 3. 보안 그룹에 현재 Runner IP 허용
+      - name: Add GitHub Actions IP to Security Group
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.AWS_SG_ID }} \
+            --protocol tcp \
+            --port ${{ secrets.REMOTE_SSH_PORT }} \
+            --cidr ${{ steps.ip.outputs.ipv4 }}/32
+
+      # 4. 기존 배포 로직 (SSH 접속)
       - name: Deploy to EC2 using SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
+          port: ${{ secrets.REMOTE_SSH_PORT }}
           script: |
-            # 1. 배포 대상 디렉토리 이동 및 소스 코드 유무 확인
+            # 디렉토리 확인 및 클론
             if [ ! -d "/home/${{ secrets.EC2_USER }}/eternal_return_crawler" ]; then
               git clone https://github.com/${{ github.repository }}.git /home/${{ secrets.EC2_USER }}/eternal_return_crawler
             fi
             
             cd /home/${{ secrets.EC2_USER }}/eternal_return_crawler
             
-            # 2. 소스 코드 동기화
-            # 배포 자동화 과정에서의 형상 관리 충돌 방지를 위해 로컬 변경사항 초기화 후 원격 코드 반영
+            # 소스 코드 동기화
             git fetch --all
             git reset --hard origin/infra/cloud-deployment
             git pull origin infra/cloud-deployment
             
-            # 3. 실행 환경 설정 (.env)
-            # 보안 관리를 위해 실제 운영 환경에서는 AWS SSM Parameter Store 등의 활용을 권고
-            # 현재는 기존 배포 서버에 설정된 환경 변수 파일을 유지하여 배포를 진행함.
-            
-            # 4. 서비스 갱신 (컨테이너 재구동)
-            # 애플리케이션 변경 사항을 이미지에 반영하기 위해 빌드 옵션 포함 실행
+            # 컨테이너 재구동
             docker-compose down
             docker-compose up -d --build
             
-            # 5. 인프라 자원 최적화
-            # 배포 과정에서 생성된 미사용 도커 이미지를 삭제하여 디스크 공간 확보
+            # 미사용 이미지 삭제
             docker image prune -f
+
+      # 5. 보안 그룹에서 IP 삭제 (성공/실패 여부 상관없이 항상 실행)
+      # 앞 단계가 실패해도 반드시 실행하여 보안 구멍 방지
+      - name: Remove GitHub Actions IP from Security Group
+        if: always() 
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.AWS_SG_ID }} \
+            --protocol tcp \
+            --port 22 \
+            --cidr ${{ steps.ip.outputs.ipv4 }}/32
