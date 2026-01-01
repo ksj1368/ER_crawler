@@ -56,7 +56,7 @@ if DB_USER and DB_PASSWORD and DB_HOST:
 else:
     DATABASE_URL = None
     if ENV == "prod":
-        print("CRITICAL WARNING: Database credentials missing in production environment!")
+        raise ValueError("CRITICAL ERROR: Database credentials missing in production environment!")
 
 # Logging
 LOG_PATH.mkdir(parents=True, exist_ok=True)
