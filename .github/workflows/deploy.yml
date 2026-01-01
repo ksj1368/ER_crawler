@@ -57,13 +57,29 @@ jobs:
             git fetch --all
             git reset --hard origin/infra/cloud-deployment
             git pull origin infra/cloud-deployment
+
+            # 3. 환경 변수 파일(.env) 생성 - Prod 모드 설정
+            # 기존 파일이 있다면 덮어씌웁니다.
+            cat <<EOF > .env
+            ENV=prod
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_REGION=${{ secrets.AWS_REGION }}
+            AWS_S3_BUCKET=${{ secrets.AWS_S3_BUCKET }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            API_KEY=${{ secrets.API_KEY }}
+            EOF
             
-            # 3. Docker Compose 실행 (최신 버전은 하이픈(-) 없는 'docker compose' 사용)
+            # 4. Docker Compose 실행 (최신 버전은 하이픈(-) 없는 'docker compose' 사용)
             # '|| true'는 컨테이너가 없어서 에러가 나도 스크립트가 멈추지 않게 함
             docker compose down || true
             docker compose up -d --build
             
-            # 4. 미사용 이미지 삭제
+            # 5. 미사용 이미지 삭제
             docker image prune -f
 
       # 5. 보안 그룹에서 IP 삭제 (성공/실패 여부 상관없이 항상 실행)
