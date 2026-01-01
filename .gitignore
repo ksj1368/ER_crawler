@@ -204,3 +204,9 @@ $RECYCLE.BIN/
 .json
 data/
 logs/
+
+### gemini CLI prompts ###
+gemini.md
+
+### SSL certificates ###
+*.pem
