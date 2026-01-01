@@ -15,11 +15,11 @@ x-airflow-common:
     API_KEY: ${API_KEY}
     
     # DB Settings (Default to env vars, override in local compose)
-    DB_HOST: ${DB_HOST}
+    DB_HOST: ${DB_HOST:?DB_HOST must be set in your .env file}
     DB_PORT: ${DB_PORT:-3306}
     DB_NAME: ${DB_NAME:-erdb}
-    DB_USER: ${DB_USER}
-    DB_PASSWORD: ${DB_PASSWORD}
+    DB_USER: ${DB_USER:?DB_USER must be set in your .env file}
+    DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in your .env file}
     
     # AWS Settings
     AWS_REGION: ${AWS_REGION:-ap-northeast-2}
