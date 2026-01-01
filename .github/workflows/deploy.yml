@@ -80,6 +80,7 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             API_KEY=${{ secrets.API_KEY }}
             
+            AIRFLOW_UID=50000
             season_id = 35
             matching_mode = 3
             main_version = 2
