@@ -66,9 +66,9 @@ jobs:
             git pull origin $TARGET_BRANCH
 
             # 3. 환경 변수 파일 생성
-            # (테스트 브랜치일 경우를 대비해 MODE 변수 활용 가능, 현재는 Prod 환경변수 주입)
             cat <<EOF > .env
             ENV=prod
+
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             AWS_REGION=${{ secrets.AWS_REGION }}
@@ -79,6 +79,12 @@ jobs:
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             API_KEY=${{ secrets.API_KEY }}
+            
+            season_id = 35
+            matching_mode = 3
+            main_version = 2
+            region_id = 10
+
             EOF
             
             # ----------------------------------------------------------------
