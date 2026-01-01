@@ -47,6 +47,7 @@ jobs:
 
     - name: Initialize DB
       env:
+        PYTHONPATH: ${{ github.workspace }}
         DB_HOST: 127.0.0.1
         DB_PORT: 3306
         DB_USER: root
@@ -58,6 +59,8 @@ jobs:
         poetry run python scripts/init_db.py
 
     - name: Run Tests (Schema & Import Check)
+      env:
+        PYTHONPATH: ${{ github.workspace }}
       run: |
         # Basic check to ensure scripts are importable and schema is valid
         poetry run python -c "from scripts.models import Base; print('Models imported successfully')"
