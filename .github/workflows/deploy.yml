@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches:
-      - infra/cloud-deployment
+      - main  # [변경] main 브랜치에 푸시될 때 배포 실행
 
 jobs:
   deploy:
@@ -23,7 +23,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }} # 예: ap-northeast-2
+          aws-region: ${{ secrets.AWS_REGION }}
 
       # 3. 보안 그룹에 현재 Runner IP 허용
       - name: Add GitHub Actions IP to Security Group
@@ -43,23 +43,25 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.REMOTE_SSH_PORT }}
           script: |
-            # 1. 디렉토리 확인 및 클론 (Token 사용 인증)
-            # 형식: https://사용자명:토큰@github.com/아이디/리포지토리.git
-            if [ ! -d "/home/${{ secrets.EC2_USER }}/eternal_return_crawler" ]; then
-              git clone https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git /home/${{ secrets.EC2_USER }}/eternal_return_crawler
+            PROJECT_DIR="/home/${{ secrets.EC2_USER }}/eternal_return_crawler"
+            
+            # 1. 디렉토리 확인 및 클론
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git $PROJECT_DIR
             fi
             
-            cd /home/${{ secrets.EC2_USER }}/eternal_return_crawler
+            cd $PROJECT_DIR
             
             # 2. 소스 코드 동기화
-            # origin URL을 토큰이 포함된 URL로 업데이트 (기존 인증 정보 덮어쓰기)
             git remote set-url origin https://${{ secrets.EC2_USER }}:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
-            git reset --hard origin/infra/cloud-deployment
-            git pull origin infra/cloud-deployment
+            
+            # [변경] main 브랜치로 전환 및 강제 동기화
+            git checkout main
+            git reset --hard origin/main
+            git pull origin main
 
             # 3. 환경 변수 파일(.env) 생성 - Prod 모드 설정
-            # 기존 파일이 있다면 덮어씌웁니다.
             cat <<EOF > .env
             ENV=prod
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -74,21 +76,19 @@ jobs:
             API_KEY=${{ secrets.API_KEY }}
             EOF
             
-            # 4. Docker Compose 실행 (최신 버전은 하이픈(-) 없는 'docker compose' 사용)
-            # '|| true'는 컨테이너가 없어서 에러가 나도 스크립트가 멈추지 않게 함
+            # 4. Docker Compose 실행
             docker compose down || true
             docker compose up -d --build
             
             # 5. 미사용 이미지 삭제
             docker image prune -f
 
-      # 5. 보안 그룹에서 IP 삭제 (성공/실패 여부 상관없이 항상 실행)
-      # 앞 단계가 실패해도 반드시 실행하여 보안 구멍 방지
+      # 5. 보안 그룹에서 IP 삭제
       - name: Remove GitHub Actions IP from Security Group
         if: always() 
         run: |
           aws ec2 revoke-security-group-ingress \
             --group-id ${{ secrets.AWS_SG_ID }} \
             --protocol tcp \
-            --port 22 \
+            --port ${{ secrets.REMOTE_SSH_PORT }} \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32
