@@ -84,6 +84,9 @@ services:
     command:
       - -c
       - |
+        # Airflow DB 생성
+        echo "Creating Airflow database if not exists..."
+        python /opt/airflow/scripts/create_airflow_db.py
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
