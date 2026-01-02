@@ -6,7 +6,7 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@er-db/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     
@@ -15,7 +15,7 @@ x-airflow-common:
     API_KEY: ${API_KEY}
     
     # DB Settings
-    DB_HOST: ${DB_HOST:-er-db}
+    DB_HOST: ${DB_HOST:-erdb}
     DB_PORT: ${DB_PORT:-3306}
     DB_NAME: ${DB_NAME:-erdb}
     DB_USER: ${DB_USER:?DB_USER must be set in your .env file}
@@ -42,11 +42,11 @@ x-airflow-common:
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
-    er-db:
+    erdb:
       condition: service_healthy
 
 services:
-  er-db:
+  erdb:
     image: mysql:8.0
     # 인증 플러그인 호환성 설정
     command: --default-authentication-plugin=mysql_native_password
