@@ -6,7 +6,7 @@ x-airflow-common:
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@er-db/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     
@@ -14,8 +14,8 @@ x-airflow-common:
     ENV: ${ENV:-dev}
     API_KEY: ${API_KEY}
     
-    # DB Settings (Default to env vars, override in local compose)
-    DB_HOST: ${DB_HOST:?DB_HOST must be set in your .env file}
+    # DB Settings
+    DB_HOST: ${DB_HOST:-er-db}
     DB_PORT: ${DB_PORT:-3306}
     DB_NAME: ${DB_NAME:-erdb}
     DB_USER: ${DB_USER:?DB_USER must be set in your .env file}
@@ -42,23 +42,29 @@ x-airflow-common:
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
-    postgres:
+    er-db:
       condition: service_healthy
 
 services:
-  postgres:
-    image: postgres:13
+  er-db:
+    image: mysql:8.0
+    # 인증 플러그인 호환성 설정
+    command: --default-authentication-plugin=mysql_native_password
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: airflow     # Airflow용 기본 DB 생성
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - postgres-db-volume:/var/lib/postgresql/data
+      - mysql-db-volume:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 5s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
       retries: 5
     restart: always
+    ports:
+      - "3306:3306"
 
   airflow-webserver:
     <<: *airflow-common
@@ -97,4 +103,4 @@ services:
       - .:/sources
 
 volumes:
-  postgres-db-volume:
+  mysql-db-volume: 
