@@ -5,6 +5,7 @@ x-airflow-common:
   build: .
   environment:
     &airflow-common-env
+    TZ: Asia/Seoul
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
