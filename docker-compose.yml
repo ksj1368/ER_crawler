@@ -48,7 +48,7 @@ services:
     command: --default-authentication-plugin=mysql_native_password
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_HOST:-erdb}     # Airflow용 기본 DB 생성
+      MYSQL_DATABASE: airflow     # Airflow용 기본 DB 생성
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
