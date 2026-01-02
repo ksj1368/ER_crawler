@@ -15,8 +15,8 @@ x-airflow-common:
     API_KEY: ${API_KEY}
     
     # DB Settings
-    DB_HOST: er-db
-    DB_PORT: 3306
+    DB_HOST: ${DB_HOST:-er-db}
+    DB_PORT: ${DB_PORT:-3306}
     DB_NAME: ${DB_NAME:-erdb}
     DB_USER: ${DB_USER:?DB_USER must be set in your .env file}
     DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in your .env file}
