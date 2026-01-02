@@ -62,19 +62,6 @@ services:
     ports:
       - "3306:3306"
 
-  db-migrator:
-    <<: *airflow-common
-    command: >
-      bash -c "
-      echo 'Waiting for database at $$DB_HOST:$$DB_PORT...'
-      while ! timeout 1s bash -c \"echo > /dev/tcp/$$DB_HOST/$$DB_PORT\" 2>/dev/null; do
-        sleep 1
-      done
-      echo 'Database is up! Running migrations...'
-      alembic upgrade head
-      "
-    restart: on-failure
-
   airflow-webserver:
     <<: *airflow-common
     command: webserver
