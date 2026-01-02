@@ -73,17 +73,10 @@ services:
       timeout: 30s
       retries: 5
     restart: always
-    depends_on:
-      db-migrator:
-        condition: service_completed_successfully
-
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: always
-    depends_on:
-      db-migrator:
-        condition: service_completed_successfully
 
   airflow-init:
     <<: *airflow-common
