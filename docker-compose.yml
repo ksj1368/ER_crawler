@@ -95,8 +95,7 @@ services:
       - -c
       - |
         # Airflow DB 생성
-        echo "Creating Airflow database if not exists..."
-        python /opt/airflow/scripts/create_airflow_db.py
+        python3 -c "import pymysql, os; conn = pymysql.connect(host=os.getenv('DB_HOST'), user=os.getenv('DB_USER'), password=os.getenv('DB_PASSWORD')); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS airflow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'); conn.close()"
 
         # airflow dag, log, plugin 초기화 
         mkdir -p /sources/logs /sources/dags /sources/plugins
