@@ -28,10 +28,11 @@ with DAG(
     'eternal_return_crawler_v1',
     default_args=default_args,
     description='Eternal Return Data Collection Pipeline',
-    schedule_interval='0 4 * * *', # 매일 새벽 4시에 실행
+    schedule_interval='0 * * * *', # 매일 정각에 실행
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['eternal_return', 'crawler', 'pipeline'],
+    max_active_runs=1 # 동시에 하나의 DAG 실행만 허용
 ) as dag:
 
     t1_run_collection = PythonOperator(

@@ -40,10 +40,6 @@ x-airflow-common:
     - ./alembic:/opt/airflow/alembic
     - ./alembic.ini:/opt/airflow/alembic.ini
   user: "${AIRFLOW_UID:-50000}:0"
-  depends_on:
-    &airflow-common-depends-on
-    erdb:
-      condition: service_healthy
 
 services:
   erdb:
@@ -77,7 +73,6 @@ services:
       timeout: 30s
       retries: 5
     restart: always
-
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
