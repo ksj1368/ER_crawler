@@ -5,6 +5,7 @@ x-airflow-common:
   build: .
   environment:
     &airflow-common-env
+    TZ: Asia/Seoul
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/airflow
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
@@ -44,11 +45,10 @@ x-airflow-common:
 services:
   erdb:
     image: mysql:8.0
-    # 인증 플러그인 호환성 설정
-    command: --default-authentication-plugin=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password # 인증 플러그인 호환성 설정
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
-      MYSQL_DATABASE: ${DB_HOST:-erdb}     # Airflow용 기본 DB 생성
+      MYSQL_DATABASE: airflow     # Airflow용 기본 DB 생성
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
@@ -61,6 +61,12 @@ services:
     restart: always
     ports:
       - "3306:3306"
+  
+  # DB 테이블 생성 및 마이그레이션
+  db-migrator:
+    <<: *airflow-common
+    command: bash -c "alembic upgrade head"
+    restart: on-failure
 
   airflow-webserver:
     <<: *airflow-common
@@ -73,17 +79,26 @@ services:
       timeout: 30s
       retries: 5
     restart: always
+    depends_on: # DB 테이블 생성 및 마이그레이션이 완료된 후 시작
+      db-migrator:
+        condition: service_completed_successfully
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: always
-
+    depends_on:
+      db-migrator: # 스케줄러도 DB가 준비된 후 시작
+        condition: service_completed_successfully
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
     command:
       - -c
       - |
+        # Airflow DB 생성
+        python3 -c "import pymysql, os; conn = pymysql.connect(host=os.getenv('DB_HOST'), user=os.getenv('DB_USER'), password=os.getenv('DB_PASSWORD')); cursor = conn.cursor(); cursor.execute('CREATE DATABASE IF NOT EXISTS airflow CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'); conn.close()"
+
+        # airflow dag, log, plugin 초기화 
         mkdir -p /sources/logs /sources/dags /sources/plugins
         chown -R "${AIRFLOW_UID}:0" /sources/{logs,dags,plugins}
         exec /entrypoint airflow version
