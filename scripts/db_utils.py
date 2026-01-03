@@ -87,7 +87,7 @@ def _get_or_create_sources_generic(
     
     # 1. 초기 캐시 확인(Lock 보유)
     with _CACHE_LOCK:
-        for item in items:
+        for item in set(items):
             if item in cache:
                 item_map[item] = cache[item]
             else:
@@ -185,22 +185,30 @@ def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
         if not data_to_insert:
             return
 
+        # Transaction 시작
         with engine.begin() as conn:
+            # 1. 외래키 체크 해제(대량 삽입 속도 향상 및 순서 문제 회피)
             conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
             logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
 
-            if table_name in Base.metadata.tables:
-                table = Base.metadata.tables[table_name]
-                stmt = insert(table).values(data_to_insert)
-                conn.execute(stmt)
-            else:
-                logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
-                keys = data_to_insert[0].keys()
-                columns = ', '.join(keys)
-                placeholders = ', '.join([f":{key}" for key in keys])
-                
-                stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-                conn.execute(stmt, data_to_insert)
+            try:
+                # 2. 데이터 삽입 로직
+                if table_name in Base.metadata.tables:
+                    table = Base.metadata.tables[table_name]
+                    stmt = insert(table).values(data_to_insert)
+                    conn.execute(stmt)
+                else:
+                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                    keys = data_to_insert[0].keys()
+                    columns = ', '.join(keys)
+                    placeholders = ', '.join([f":{key}" for key in keys])
+                    
+                    stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
+                    conn.execute(stmt, data_to_insert)
+            
+            finally:
+                # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
+                conn.execute(text("SET FOREIGN_KEY_CHECKS=1;"))
             
     except Exception as e:
         logger.error(f"Failed to save table '{table_name}': {e}")
