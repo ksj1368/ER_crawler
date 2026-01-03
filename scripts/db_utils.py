@@ -67,74 +67,84 @@ def _get_or_create_sources_generic(
     table_name: str
 ) -> Dict[str, int]:
     """
-    크레딧 획득, 소모 소스 공통 처리 함수
+    크레딧 획득, 소모 소스 공통 처리 함수 (최적화된 락 사용)
     :param engine: DB 엔진
     :param items: 소스 이름 리스트
-    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너
+    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너리
     :param model: SQLAlchemy 모델 클래스
     :param table_name: DB 테이블 이름
     :return: {source_name: source_id} 매핑 딕셔너리
-    1. In-Memory Cache 확인
-    2. DB 조회
-    3. 없는 항목 필터링
-    4. 새로운 항목 INSERT
-    5. 새로 생성된 항목 재조회
     """
     if not items:
         return {}
+
+    # 테이블 검증
+    if table_name not in ["credit_acquisition_source", "credit_expenditure_source"]:
+        raise ValueError(f"Invalid table_name: {table_name}")
         
     item_map = {}
     missing_items = []
     
+    # 1. 초기 캐시 확인(Lock 보유)
     with _CACHE_LOCK:
-        # 1. 캐시 확인
         for item in items:
             if item in cache:
                 item_map[item] = cache[item]
             else:
                 missing_items.append(item)
                 
-        if not missing_items:
-            return item_map
-        
-        # 2. DB 조회
-        with engine.connect() as conn:
-            stmt = select(model.source_name, model.source_id).where(
-                model.source_name.in_(missing_items)
-            )
-            result = conn.execute(stmt)
-            existing = {row[0]: row[1] for row in result}
-            
-            cache.update(existing)
-            item_map.update(existing)
-            
-        # 3. 없는 항목 필터링
-        really_missing = [item for item in missing_items if item not in item_map]
-                
-        # 4. 새로운 항목 INSERT
-        if really_missing:
-            try:
-                with engine.begin() as conn:
-                    values = [{"source_name": item} for item in really_missing]
-                    stmt = text(f"INSERT IGNORE INTO {table_name} (source_name) VALUES (:source_name)")
-                    conn.execute(stmt, values)
-
-                # 5. 새로 생성된 항목 재조회
-                with engine.connect() as conn:
-                    stmt = select(model.source_name, model.source_id).where(
-                        model.source_name.in_(really_missing)
-                    )
-                    result = conn.execute(stmt)
-                    new_mapping = {row[0]: row[1] for row in result}
-                    
-                    cache.update(new_mapping)
-                    item_map.update(new_mapping)
-                    
-            except Exception as e:
-                logger.error(f"Failed to create sources in {table_name}: {e}")
-                raise
-            
+    if not missing_items:
         return item_map
+    
+    # 2. DB 조회(Lock 미보유 - I/O 병목 방지)
+    with engine.connect() as conn:
+        stmt = select(model.source_name, model.source_id).where(
+            model.source_name.in_(missing_items)
+        )
+        result = conn.execute(stmt)
+        existing = {row[0]: row[1] for row in result}
+        
+    # 3. 캐시 업데이트 및 진짜 없는 항목 식별(Lock 보유)
+    with _CACHE_LOCK:
+        cache.update(existing)
+        item_map.update(existing)
+        
+        really_missing = []
+        for item in missing_items:
+            if item in item_map:
+                continue
+            # 다른 스레드가 그 사이 캐시에 넣었는지 확인
+            if item in cache:
+                item_map[item] = cache[item]
+            else:
+                really_missing.append(item)
+            
+    # 4. 새로운 항목 INSERT(Lock 미보유)
+    if really_missing:
+        try:
+            with engine.begin() as conn:
+                values = [{"source_name": item} for item in really_missing]
+                stmt = text(f"INSERT IGNORE INTO {table_name} (source_name) VALUES (:source_name)")
+                conn.execute(stmt, values)
+                
+            # 5. 새로 생성된 항목 재조회(Lock 미보유)
+            with engine.connect() as conn:
+                stmt = select(model.source_name, model.source_id).where(
+                    model.source_name.in_(really_missing)
+                )
+                result = conn.execute(stmt)
+                new_mapping = {row[0]: row[1] for row in result}
+                
+            # 6. 최종 캐시 업데이트(Lock 보유)
+            with _CACHE_LOCK:
+                cache.update(new_mapping)
+                item_map.update(new_mapping)
+                
+        except Exception as e:
+            logger.error(f"Failed to create sources in {table_name}: {e}")
+            raise
+        
+    return item_map
 
 def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Dict[str, int]:
     """
