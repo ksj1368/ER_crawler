@@ -1,4 +1,5 @@
 import os
+import threading
 from sqlalchemy import create_engine, text, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
@@ -17,6 +18,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 # Global Caches for Source IDs (key: source_name, value: source_id)
 _ACQUISITION_SOURCE_ID_CACHE: Dict[str, int] = {}
 _EXPENDITURE_SOURCE_ID_CACHE: Dict[str, int] = {}
+_CACHE_LOCK = threading.Lock()
 
 def get_engine() -> Engine:
     """SQLAlchemy 엔진 인스턴스를 반환"""
@@ -57,129 +59,108 @@ def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str
         result = conn.execute(stmt)
         return {row[0]: row[1] for row in result}
 
+def _get_or_create_sources_generic(
+    engine: Engine, 
+    items: List[str], 
+    cache: Dict[str, int], 
+    model: Any, 
+    table_name: str
+) -> Dict[str, int]:
+    """
+    크레딧 획득, 소모 소스 공통 처리 함수
+    :param engine: DB 엔진
+    :param items: 소스 이름 리스트
+    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너
+    :param model: SQLAlchemy 모델 클래스
+    :param table_name: DB 테이블 이름
+    :return: {source_name: source_id} 매핑 딕셔너리
+    1. In-Memory Cache 확인
+    2. DB 조회
+    3. 없는 항목 필터링
+    4. 새로운 항목 INSERT
+    5. 새로 생성된 항목 재조회
+    """
+    if not items:
+        return {}
+        
+    item_map = {}
+    missing_items = []
+    
+    with _CACHE_LOCK:
+        # 1. 캐시 확인
+        for item in items:
+            if item in cache:
+                item_map[item] = cache[item]
+            else:
+                missing_items.append(item)
+                
+        if not missing_items:
+            return item_map
+        
+        # 2. DB 조회
+        with engine.connect() as conn:
+            stmt = select(model.source_name, model.source_id).where(
+                model.source_name.in_(missing_items)
+            )
+            result = conn.execute(stmt)
+            existing = {row[0]: row[1] for row in result}
+            
+            cache.update(existing)
+            item_map.update(existing)
+            
+        # 3. 없는 항목 필터링
+        really_missing = [item for item in missing_items if item not in item_map]
+                
+        # 4. 새로운 항목 INSERT
+        if really_missing:
+            try:
+                with engine.begin() as conn:
+                    values = [{"source_name": item} for item in really_missing]
+                    stmt = text(f"INSERT IGNORE INTO {table_name} (source_name) VALUES (:source_name)")
+                    conn.execute(stmt, values)
+
+                # 5. 새로 생성된 항목 재조회
+                with engine.connect() as conn:
+                    stmt = select(model.source_name, model.source_id).where(
+                        model.source_name.in_(really_missing)
+                    )
+                    result = conn.execute(stmt)
+                    new_mapping = {row[0]: row[1] for row in result}
+                    
+                    cache.update(new_mapping)
+                    item_map.update(new_mapping)
+                    
+            except Exception as e:
+                logger.error(f"Failed to create sources in {table_name}: {e}")
+                raise
+            
+        return item_map
+
 def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Dict[str, int]:
     """
     크레딧 획득처를 mapping: {source_name: source_id}으로 반환.
     DB에 없는 새로운 source_id은 새로 생성. In-Memory Cache 사용.
     """
-    if not sources:
-        return {}
-        
-    global _ACQUISITION_SOURCE_ID_CACHE
-    source_map = {}
-    missing_sources = []
-    
-    # 1. 캐시에서 조회
-    for src in sources:
-        if src in _ACQUISITION_SOURCE_ID_CACHE:
-            source_map[src] = _ACQUISITION_SOURCE_ID_CACHE[src]
-        else:
-            missing_sources.append(src)
-            
-    if not missing_sources:
-        return source_map
-    
-    # 2. DB에서 조회 (캐시에 없는 것만)
-    with engine.connect() as conn:
-        stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
-            CreditAcquisitionSource.source_name.in_(missing_sources)
-        )
-        result = conn.execute(stmt)
-        existing = {row[0]: row[1] for row in result}
-        
-        # 캐시 및 결과 맵 업데이트
-        _ACQUISITION_SOURCE_ID_CACHE.update(existing)
-        source_map.update(existing)
-        
-    # 3. 캐시, DB에도 없는 데이터 필터링
-    really_missing = [src for src in missing_sources if src not in source_map]
-            
-    # 4. 신규 크레딧 획득처 생성 및 추가
-    if really_missing:
-        try:
-            with engine.begin() as conn:
-                values = [{"source_name": src} for src in really_missing]
-                stmt = text("INSERT IGNORE INTO credit_acquisition_source (source_name) VALUES (:source_name)")
-                conn.execute(stmt, values)
-                
-            # 5. 생성된 ID 조회 및 캐시 업데이트
-            with engine.connect() as conn:
-                stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
-                    CreditAcquisitionSource.source_name.in_(really_missing)
-                )
-                result = conn.execute(stmt)
-                new_mapping = {row[0]: row[1] for row in result}
-                
-                _ACQUISITION_SOURCE_ID_CACHE.update(new_mapping)
-                source_map.update(new_mapping)
-                
-        except Exception as e:
-            logger.error(f"Failed to create acquisition sources: {e}")
-            raise
-            
-    return source_map
+    return _get_or_create_sources_generic(
+        engine, 
+        sources, 
+        _ACQUISITION_SOURCE_ID_CACHE, 
+        CreditAcquisitionSource, 
+        "credit_acquisition_source"
+    )
 
 def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict[str, int]:
     """
     크레딧 소모처(아이템 등)를 mapping: {expenditure_item: source_id}으로 반환.
     DB에 없는 새로운 source_id은 새로 생성. In-Memory Cache 사용.
     """
-    if not items:
-        return {}
-        
-    global _EXPENDITURE_SOURCE_ID_CACHE
-    item_map = {}
-    missing_items = []
-    
-    # 1. 캐시에서 조회
-    for item in items:
-        if item in _EXPENDITURE_SOURCE_ID_CACHE:
-            item_map[item] = _EXPENDITURE_SOURCE_ID_CACHE[item]
-        else:
-            missing_items.append(item)
-            
-    if not missing_items:
-        return item_map
-    
-    # 2. DB에서 조회 (캐시에 없는 것만)
-    with engine.connect() as conn:
-        stmt = select(CreditExpenditureSource.source_name, CreditExpenditureSource.source_id).where(
-            CreditExpenditureSource.source_name.in_(missing_items)
-        )
-        result = conn.execute(stmt)
-        existing = {row[0]: row[1] for row in result}
-        
-        # 캐시 및 결과 맵 업데이트
-        _EXPENDITURE_SOURCE_ID_CACHE.update(existing)
-        item_map.update(existing)
-        
-    # 3. 캐시, DB에도 없는 데이터 필터링
-    really_missing = [item for item in missing_items if item not in item_map]
-            
-    # 4. 신규 크레딧 소모 생성 및 추가
-    if really_missing:
-        try:
-            with engine.begin() as conn:
-                values = [{"source_name": item} for item in really_missing]
-                stmt = text("INSERT IGNORE INTO credit_expenditure_source (source_name) VALUES (:source_name)")
-                conn.execute(stmt, values)
-                
-            # 5. 생성된 ID 조회 및 캐시 업데이트
-            with engine.connect() as conn:
-                stmt = select(CreditExpenditureSource.source_name, CreditExpenditureSource.source_id).where(
-                    CreditExpenditureSource.source_name.in_(really_missing)
-                )
-                result = conn.execute(stmt)
-                new_mapping = {row[0]: row[1] for row in result}
-                
-                _EXPENDITURE_SOURCE_ID_CACHE.update(new_mapping)
-                item_map.update(new_mapping)
-                
-        except Exception as e:
-            logger.error(f"Failed to create expenditure sources: {e}")
-            raise
-            
-    return item_map
+    return _get_or_create_sources_generic(
+        engine, 
+        items, 
+        _EXPENDITURE_SOURCE_ID_CACHE, 
+        CreditExpenditureSource, 
+        "credit_expenditure_source"
+    )
 
 def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
     """단일 데이터프레임을 DB에 저장하는 함수"""
