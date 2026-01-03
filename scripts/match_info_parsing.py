@@ -329,6 +329,9 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
     for u in data.get("userGames", []):
         match_id = u["gameId"]
         uid = u["uid"]
+        
+        # 유저별 소모 아이템 순번 추적용
+        item_counter = Counter()
 
         # 할인 로직 적용
         kiosk_prices = copy.deepcopy(console_item_mapping)
@@ -351,10 +354,12 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 
                 if special_material_spent[cr_key] >= price > 0:
                     special_material_spent[cr_key] -= price
+                    item_counter[name] += 1
                     expenditure_list.append({
                         "match_id": match_id, "uid": uid,
                         "expenditure_item": name, "expenditure_type": exp_type,
-                        "credit_amount": int(price), "usage_count": 1
+                        "credit_amount": int(price), "usage_count": 1,
+                        "order_seq": item_counter[name]
                     })
                 else:
                     robot_purchase_log.append(item_code)
@@ -370,10 +375,12 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                 name, _, original_price = console_item_mapping[item_code]
                 price = robot_fixed_prices.get(item_code, original_price)
 
+                item_counter[name] += 1
                 expenditure_list.append({
                     "match_id": match_id, "uid": uid,
                     "expenditure_item": name, "expenditure_type": "robot_item",
-                    "credit_amount": int(count * price), "usage_count": count
+                    "credit_amount": int(count * price), "usage_count": count,
+                    "order_seq": item_counter[name]
                 })
 
         # --- 기타 소모 항목 처리 ---
@@ -381,10 +388,12 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
         for source_key, (exp_type, default_count) in credit_source_mapping.items():
             amount = credit_source.get(source_key, 0)
             if amount > 0:
+                 item_counter[source_key] += 1
                  expenditure_list.append({
                     "match_id": match_id, "uid": uid,
                     "expenditure_item": source_key, "expenditure_type": exp_type,
-                    "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count
+                    "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count,
+                    "order_seq": item_counter[source_key]
                 })
 
         # --- 드론 아이템 처리 로직 ---
@@ -394,18 +403,22 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             for item_code, (name, exp_type, cost) in drone_item_mapping.items():
                 count = drone_item_counts.pop(item_code, 0)
                 if count > 0:
+                    item_counter[name] += 1
                     expenditure_list.append({
                         "match_id": match_id, "uid": uid,
                         "expenditure_item": name, "expenditure_type": exp_type,
-                        "credit_amount": int(count * cost), "usage_count": count
+                        "credit_amount": int(count * cost), "usage_count": count,
+                        "order_seq": item_counter[name]
                     })
             
             other_items_count = sum(drone_item_counts.values())
             if other_items_count > 0:
+                item_counter["etc"] += 1
                 expenditure_list.append({
                     "match_id": match_id, "uid": uid,
                     "expenditure_item": "etc", "expenditure_type": "remotedrone_item",
-                    "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count
+                    "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count,
+                    "order_seq": item_counter["etc"]
                 })
     return pd.DataFrame(expenditure_list)
 
