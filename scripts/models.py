@@ -392,25 +392,31 @@ class CreditAcquisitionSource(Base):
 
 class MatchUserCreditAcquisitions(Base):
     __tablename__ = 'match_user_credit_acquisitions'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
-    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
-    acquisition_source_id = Column(Integer, ForeignKey('credit_acquisition_source.source_id'))
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
+    acquisition_source_id = Column(Integer, ForeignKey('credit_acquisition_source.source_id'), primary_key=True)
     acquisition_type = Column(String(32))
     credit_amount = Column(Float)
     source_category = Column(String(32))
 
     source_info = relationship("CreditAcquisitionSource")
 
+class CreditExpenditureSource(Base):
+    __tablename__ = 'credit_expenditure_source'
+    source_id = Column(Integer, primary_key=True, autoincrement=True)
+    source_name = Column(String(64), unique=True)
+
 class MatchUserCreditExpenditures(Base):
     __tablename__ = 'match_user_credit_expenditures'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
-    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
-    expenditure_item = Column(String(32))
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
+    expenditure_source_id = Column(Integer, ForeignKey('credit_expenditure_source.source_id'), primary_key=True)
+    order_seq = Column(Integer, primary_key=True, comment='Purchase order in a single match for a user')
     expenditure_type = Column(String(32))
     credit_amount = Column(Integer)
     usage_count = Column(Integer)
+
+    source_info = relationship("CreditExpenditureSource")
 
 class MatchUserCreditTime(Base):
     __tablename__ = 'match_user_credit_time'
@@ -422,9 +428,8 @@ class MatchUserCreditTime(Base):
 
 class MatchUserObject(Base):
     __tablename__ = 'match_user_object'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    match_id = Column(Integer, ForeignKey('match_user_start.match_id'))
-    user_num = Column(Integer, ForeignKey('match_user_start.user_num'))
-    metric_type = Column(String(32))
-    metric_name = Column(String(32))
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
+    metric_type = Column(String(32), primary_key=True)
+    metric_name = Column(String(32), primary_key=True)
     value = Column(Integer)
