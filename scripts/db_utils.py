@@ -14,8 +14,9 @@ from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource, Credi
 logger = logging.getLogger(__name__)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
 
-# Global Cache for Source IDs (key: source_name, value: source_id)
-_SOURCE_ID_CACHE: Dict[str, int] = {}
+# Global Caches for Source IDs (key: source_name, value: source_id)
+_ACQUISITION_SOURCE_ID_CACHE: Dict[str, int] = {}
+_EXPENDITURE_SOURCE_ID_CACHE: Dict[str, int] = {}
 
 def get_engine() -> Engine:
     """SQLAlchemy 엔진 인스턴스를 반환"""
@@ -64,14 +65,14 @@ def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Di
     if not sources:
         return {}
         
-    global _SOURCE_ID_CACHE
+    global _ACQUISITION_SOURCE_ID_CACHE
     source_map = {}
     missing_sources = []
     
     # 1. 캐시에서 조회
     for src in sources:
-        if src in _SOURCE_ID_CACHE:
-            source_map[src] = _SOURCE_ID_CACHE[src]
+        if src in _ACQUISITION_SOURCE_ID_CACHE:
+            source_map[src] = _ACQUISITION_SOURCE_ID_CACHE[src]
         else:
             missing_sources.append(src)
             
@@ -87,7 +88,7 @@ def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Di
         existing = {row[0]: row[1] for row in result}
         
         # 캐시 및 결과 맵 업데이트
-        _SOURCE_ID_CACHE.update(existing)
+        _ACQUISITION_SOURCE_ID_CACHE.update(existing)
         source_map.update(existing)
         
     # 3. 캐시, DB에도 없는 데이터 필터링
@@ -109,7 +110,7 @@ def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Di
                 result = conn.execute(stmt)
                 new_mapping = {row[0]: row[1] for row in result}
                 
-                _SOURCE_ID_CACHE.update(new_mapping)
+                _ACQUISITION_SOURCE_ID_CACHE.update(new_mapping)
                 source_map.update(new_mapping)
                 
         except Exception as e:
@@ -126,14 +127,14 @@ def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict
     if not items:
         return {}
         
-    global _SOURCE_ID_CACHE
+    global _EXPENDITURE_SOURCE_ID_CACHE
     item_map = {}
     missing_items = []
     
     # 1. 캐시에서 조회
     for item in items:
-        if item in _SOURCE_ID_CACHE:
-            item_map[item] = _SOURCE_ID_CACHE[item]
+        if item in _EXPENDITURE_SOURCE_ID_CACHE:
+            item_map[item] = _EXPENDITURE_SOURCE_ID_CACHE[item]
         else:
             missing_items.append(item)
             
@@ -149,7 +150,7 @@ def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict
         existing = {row[0]: row[1] for row in result}
         
         # 캐시 및 결과 맵 업데이트
-        _SOURCE_ID_CACHE.update(existing)
+        _EXPENDITURE_SOURCE_ID_CACHE.update(existing)
         item_map.update(existing)
         
     # 3. 캐시, DB에도 없는 데이터 필터링
@@ -171,7 +172,7 @@ def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict
                 result = conn.execute(stmt)
                 new_mapping = {row[0]: row[1] for row in result}
                 
-                _SOURCE_ID_CACHE.update(new_mapping)
+                _EXPENDITURE_SOURCE_ID_CACHE.update(new_mapping)
                 item_map.update(new_mapping)
                 
         except Exception as e:
