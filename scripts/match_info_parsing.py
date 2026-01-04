@@ -390,10 +390,10 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
             if amount > 0:
                  item_counter[source_key] += 1
                  expenditure_list.append({
-                    "match_id": match_id, "uid": uid,
-                    "expenditure_item": source_key, "expenditure_type": exp_type,
-                    "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count,
-                    "order_seq": item_counter[source_key]
+                     "match_id": match_id, "uid": uid,
+                     "expenditure_item": source_key, "expenditure_type": exp_type,
+                     "credit_amount": int(amount), "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count,
+                     "order_seq": item_counter[source_key]
                 })
 
         # --- 드론 아이템 처리 로직 ---
