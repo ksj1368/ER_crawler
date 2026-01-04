@@ -238,7 +238,7 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
         if not df.empty and 'expenditure_item' in df.columns:
             unique_items = df['expenditure_item'].unique().tolist()
             # None 값 제거(문자열만 처리)
-            unique_items = [str(x) for x in unique_items if x is not None]
+            unique_items = [str(x) for x in unique_items if x is not None and str(x).strip()]
             
             source_map = _get_or_create_expenditure_sources(engine, unique_items)
             
