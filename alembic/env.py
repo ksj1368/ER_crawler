@@ -11,10 +11,10 @@ from scripts.models import Base
 
 config = context.config
 
-# 로깅 설정
+# 로깅 설정 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Alembic이 비교할 메타데이터 설정
-target_metadata = Base.metadata # Alembic이 모델과 DB의 차이를 비교
+target_metadata = Base.metadata # Alembic이 모델과 데이터베이스의 차이를 비교
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
