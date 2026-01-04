@@ -124,7 +124,7 @@ def _get_or_create_sources_generic(
         try:
             with engine.begin() as conn:
                 values = [{"source_name": item} for item in really_missing]
-                stmt = text(f"INSERT IGNORE INTO {table_name} (source_name) VALUES (:source_name)")
+                stmt = insert(model.__table__).prefix_with("IGNORE")
                 conn.execute(stmt, values)
                 
             # 5. 새로 생성된 항목 재조회(Lock 미보유)
