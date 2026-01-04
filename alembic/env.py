@@ -1,11 +1,13 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__)))) # scripts 모듈을 찾을 수 있도록 경로 추가
+# scripts 모듈을 찾을 수 있도록 경로 추가
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 from logging.config import fileConfig
 from alembic import context
 from scripts.config import DATABASE_URL
-from scripts.models import Base # 모델의 메타데이터를 포함
+import scripts.models 
+from scripts.models import Base 
 
 config = context.config
 
