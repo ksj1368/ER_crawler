@@ -24,6 +24,9 @@ BASE_URL = URLS['base_url']
 
 T = TypeVar('T', bound=BaseModel) # Pydantic 모델 타입 변수
 
+# 전역 Rate Limiter 설정 (초당 50 요청)
+GLOBAL_LIMITER = AsyncLimiter(50, 1)
+
 class ERAPIClient:
     def __init__(self, api_key: Optional[str] = None): # API Key를 인자로 받거나 환경 변수에서 로드
         self.api_key = api_key or os.getenv("API_KEY")
@@ -35,7 +38,7 @@ class ERAPIClient:
             "x-api-key": self.api_key
         }
         self.session: Optional[aiohttp.ClientSession] = None
-        self.limiter = AsyncLimiter(50, 1)  # 50 requests per second
+        self.limiter = GLOBAL_LIMITER
 
     async def __aenter__(self):
         """ 비동기 컨텍스트 매니저 진입 시 세션 생성 """
