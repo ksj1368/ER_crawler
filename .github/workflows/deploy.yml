@@ -53,6 +53,11 @@ jobs:
             
             cd $PROJECT_DIR
             
+
+            # Docker가 만든 root 소유 파일을 현재 사용자로 변경
+            echo "Fixing permissions for $PROJECT_DIR..."
+            sudo chown -R $(whoami):$(whoami) .
+
             # 2. 소스 코드 동기화 (현재 배포하려는 브랜치 기준)
             git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
