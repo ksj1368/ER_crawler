@@ -38,5 +38,5 @@ with DAG(
     t1_run_collection = PythonOperator(
         task_id='run_collection',
         python_callable=run_task,
-        execution_timeout=timedelta(hours=4), # 데이터 양에 따라 유동적일 수 있으므로 넉넉하게 설정
+        execution_timeout=timedelta(hours=24), # 데이터 양에 따라 유동적일 수 있으므로 넉넉하게 설정
     )
