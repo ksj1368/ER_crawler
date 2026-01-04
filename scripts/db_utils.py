@@ -1,4 +1,5 @@
 import os
+import threading
 from sqlalchemy import create_engine, text, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
@@ -9,10 +10,15 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from scripts.config import DATABASE_URL
-from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource
+from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource, CreditExpenditureSource
 
 logger = logging.getLogger(__name__)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+
+# Global Caches for Source IDs (key: source_name, value: source_id)
+_ACQUISITION_SOURCE_ID_CACHE: Dict[str, int] = {}
+_EXPENDITURE_SOURCE_ID_CACHE: Dict[str, int] = {}
+_CACHE_LOCK = threading.Lock()
 
 def get_engine() -> Engine:
     """SQLAlchemy 엔진 인스턴스를 반환"""
@@ -53,53 +59,118 @@ def get_uids_by_nicknames(engine: Engine, nicknames: List[str]) -> Dict[str, str
         result = conn.execute(stmt)
         return {row[0]: row[1] for row in result}
 
-def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Dict[str, int]:
+def _get_or_create_sources_generic(
+    engine: Engine, 
+    items: List[str], 
+    cache: Dict[str, int], 
+    model: Any, 
+    table_name: str
+) -> Dict[str, int]:
     """
-    크레딧 획득처를 mapping: {source_name: source_id}으로 반환.
-    DB에 없는 새로운 source_id은 새로 생성
+    크레딧 획득, 소모 소스 공통 처리 함수 (최적화된 락 사용)
+    :param engine: DB 엔진
+    :param items: 소스 이름 리스트
+    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너리
+    :param model: SQLAlchemy 모델 클래스
+    :param table_name: DB 테이블 이름
+    :return: {source_name: source_id} 매핑 딕셔너리
     """
-    if not sources:
+    if not items:
         return {}
+
+    # 테이블 검증
+    if table_name not in Base.metadata.tables:
+        raise ValueError(f"Table '{table_name}' not found in metadata")
         
-    source_map = {}
-    missing_sources = []
+    item_map = {}
+    missing_items = []
     
-    # 1. 기존 크레딧 획득처 조회
+    # 1. 초기 캐시 확인(Lock 보유)
+    with _CACHE_LOCK:
+        for item in set(items):
+            if item in cache:
+                item_map[item] = cache[item]
+            else:
+                missing_items.append(item)
+                
+    if not missing_items:
+        return item_map
+    
+    # 2. DB 조회(Lock 미보유 - I/O 병목 방지)
     with engine.connect() as conn:
-        stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
-            CreditAcquisitionSource.source_name.in_(sources)
+        stmt = select(model.source_name, model.source_id).where(
+            model.source_name.in_(missing_items)
         )
         result = conn.execute(stmt)
         existing = {row[0]: row[1] for row in result}
-        source_map.update(existing)
         
-    # 2. 없는 크레딧 획득처 필터링
-    for src in sources:
-        if src not in source_map:
-            missing_sources.append(src)
+    # 3. 캐시 업데이트 및 진짜 없는 항목 식별(Lock 보유)
+    with _CACHE_LOCK:
+        cache.update(existing)
+        item_map.update(existing)
+        
+        really_missing = []
+        for item in missing_items:
+            if item in item_map:
+                continue
+            # 다른 스레드가 그 사이 캐시에 넣었는지 확인
+            if item in cache:
+                item_map[item] = cache[item]
+            else:
+                really_missing.append(item)
             
-    # 3. 신규 크레딧 획득처 생성 및 추가
-    if missing_sources:
+    # 4. 새로운 항목 INSERT(Lock 미보유)
+    if really_missing:
         try:
             with engine.begin() as conn:
-                values = [{"source_name": src} for src in missing_sources]
-                stmt = text("INSERT IGNORE INTO credit_acquisition_source (source_name) VALUES (:source_name)")
+                values = [{"source_name": item} for item in really_missing]
+                stmt = insert(model.__table__).prefix_with("IGNORE")
                 conn.execute(stmt, values)
                 
-            # 4. 생성된 ID 조회
+            # 5. 새로 생성된 항목 재조회(Lock 미보유)
             with engine.connect() as conn:
-                stmt = select(CreditAcquisitionSource.source_name, CreditAcquisitionSource.source_id).where(
-                    CreditAcquisitionSource.source_name.in_(missing_sources)
+                stmt = select(model.source_name, model.source_id).where(
+                    model.source_name.in_(really_missing)
                 )
                 result = conn.execute(stmt)
                 new_mapping = {row[0]: row[1] for row in result}
-                source_map.update(new_mapping)
+                
+            # 6. 최종 캐시 업데이트(Lock 보유)
+            with _CACHE_LOCK:
+                cache.update(new_mapping)
+                item_map.update(new_mapping)
                 
         except Exception as e:
-            logger.error(f"Failed to create acquisition sources: {e}")
+            logger.error(f"Failed to create sources in {table_name}: {e}")
             raise
-            
-    return source_map
+        
+    return item_map
+
+def _get_or_create_acquisition_sources(engine: Engine, sources: List[str]) -> Dict[str, int]:
+    """
+    크레딧 획득처를 mapping: {source_name: source_id}으로 반환.
+    DB에 없는 새로운 source_id은 새로 생성. In-Memory Cache 사용.
+    """
+    return _get_or_create_sources_generic(
+        engine, 
+        sources, 
+        _ACQUISITION_SOURCE_ID_CACHE, 
+        CreditAcquisitionSource, 
+        "credit_acquisition_source"
+    )
+
+def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict[str, int]:
+    """
+    크레딧 소모처(아이템 등)를 mapping: {expenditure_item: source_id}으로 반환.
+    DB에 없는 새로운 source_id은 새로 생성. In-Memory Cache 사용.
+    """
+    return _get_or_create_sources_generic(
+        engine, 
+        items, 
+        _EXPENDITURE_SOURCE_ID_CACHE, 
+        CreditExpenditureSource, 
+        "credit_expenditure_source"
+    )
 
 def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
     """단일 데이터프레임을 DB에 저장하는 함수"""
@@ -114,22 +185,30 @@ def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
         if not data_to_insert:
             return
 
+        # Transaction 시작
         with engine.begin() as conn:
+            # 1. 외래키 체크 해제(대량 삽입 속도 향상 및 순서 문제 회피)
             conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
             logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
 
-            if table_name in Base.metadata.tables:
-                table = Base.metadata.tables[table_name]
-                stmt = insert(table).values(data_to_insert)
-                conn.execute(stmt)
-            else:
-                logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
-                keys = data_to_insert[0].keys()
-                columns = ', '.join(keys)
-                placeholders = ', '.join([f":{key}" for key in keys])
-                
-                stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-                conn.execute(stmt, data_to_insert)
+            try:
+                # 2. 데이터 삽입 로직
+                if table_name in Base.metadata.tables:
+                    table = Base.metadata.tables[table_name]
+                    stmt = insert(table).values(data_to_insert)
+                    conn.execute(stmt)
+                else:
+                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                    keys = data_to_insert[0].keys()
+                    columns = ', '.join(keys)
+                    placeholders = ', '.join([f":{key}" for key in keys])
+                    
+                    stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
+                    conn.execute(stmt, data_to_insert)
+            
+            finally:
+                # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
+                conn.execute(text("SET FOREIGN_KEY_CHECKS=1;"))
             
     except Exception as e:
         logger.error(f"Failed to save table '{table_name}': {e}")
@@ -152,6 +231,23 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
             # 원본 컬럼 및 알 수 없는 소스 제거
             df.drop(columns=['acquisition_source'], inplace=True)
             df.dropna(subset=['acquisition_source_id'], inplace=True)
+
+    # 크레딧 소모 소스 매핑
+    if 'match_user_credit_expenditures' in parsed_data:
+        df = parsed_data['match_user_credit_expenditures']
+        if not df.empty and 'expenditure_item' in df.columns:
+            unique_items = df['expenditure_item'].unique().tolist()
+            # None 값 제거(문자열만 처리)
+            unique_items = [str(x) for x in unique_items if x is not None and str(x).strip()]
+            
+            source_map = _get_or_create_expenditure_sources(engine, unique_items)
+            
+            # ID로 매핑
+            df['expenditure_source_id'] = df['expenditure_item'].astype(str).map(source_map)
+            
+            # 원본 컬럼 및 알 수 없는 소스 제거
+            df.drop(columns=['expenditure_item'], inplace=True)
+            df.dropna(subset=['expenditure_source_id'], inplace=True)
             
     # 저장할 모든 테이블 목록
     all_tables = list(parsed_data.keys())
@@ -159,8 +255,8 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     if not all_tables:
         return
 
-    # 워커 수를 환경 변수로 제어 (기본값: HDD 최적화 1, SSD/Cloud: 4~8 권장)
-    max_workers = int(os.getenv("DB_MAX_WORKERS", 1))
+    # 워커 수를 환경 변수로 제어 (기본값: 2로 상향 조정하여 병렬 처리 활성화)
+    max_workers = int(os.getenv("DB_MAX_WORKERS", 2))
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
