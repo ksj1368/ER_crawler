@@ -79,8 +79,8 @@ def _get_or_create_sources_generic(
         return {}
 
     # 테이블 검증
-    if table_name not in ["credit_acquisition_source", "credit_expenditure_source"]:
-        raise ValueError(f"Invalid table_name: {table_name}")
+    if table_name not in Base.metadata.tables:
+        raise ValueError(f"Table '{table_name}' not found in metadata")
         
     item_map = {}
     missing_items = []
