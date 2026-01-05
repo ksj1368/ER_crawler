@@ -177,34 +177,42 @@ def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
     if df.empty:
         return
     
+    CHUNK_SIZE = 5000
+    
     try:
         # DB NULL 처리를 위해 NaN을 None으로 변환 
         df_obj = df.astype(object).where(pd.notnull(df), None)
+        total_rows = len(df_obj)
         
-        data_to_insert = df_obj.to_dict(orient='records')
-        if not data_to_insert:
-            return
-
         # Transaction 시작
         with engine.begin() as conn:
             # 1. 외래키 체크 해제(대량 삽입 속도 향상 및 순서 문제 회피)
             conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
-            logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
+            logger.info(f"Inserting {total_rows} rows into '{table_name}' (Chunk size: {CHUNK_SIZE})")
 
             try:
-                # 2. 데이터 삽입 로직
-                if table_name in Base.metadata.tables:
-                    table = Base.metadata.tables[table_name]
-                    stmt = insert(table).values(data_to_insert)
-                    conn.execute(stmt)
-                else:
-                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
-                    keys = data_to_insert[0].keys()
-                    columns = ', '.join(keys)
-                    placeholders = ', '.join([f":{key}" for key in keys])
+                # 2. 데이터 삽입 로직 (Chunk 단위 처리)
+                for start_idx in range(0, total_rows, CHUNK_SIZE):
+                    end_idx = start_idx + CHUNK_SIZE
+                    chunk = df_obj.iloc[start_idx:end_idx]
+                    data_to_insert = chunk.to_dict(orient='records')
                     
-                    stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-                    conn.execute(stmt, data_to_insert)
+                    if not data_to_insert:
+                        continue
+
+                    if table_name in Base.metadata.tables:
+                        table = Base.metadata.tables[table_name]
+                        stmt = insert(table).values(data_to_insert)
+                        conn.execute(stmt)
+                    else:
+                        if start_idx == 0:
+                            logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                        keys = data_to_insert[0].keys()
+                        columns = ', '.join(keys)
+                        placeholders = ', '.join([f":{key}" for key in keys])
+                        
+                        stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
+                        conn.execute(stmt, data_to_insert)
             
             finally:
                 # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
