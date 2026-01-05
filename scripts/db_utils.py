@@ -3,13 +3,12 @@ import threading
 from sqlalchemy import create_engine, text, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
-import pandas as pd
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from scripts.config import DATABASE_URL
+from scripts.config import DATABASE_URL, DB_CHUNK_SIZE
 from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource, CreditExpenditureSource
 
 logger = logging.getLogger(__name__)
@@ -68,12 +67,6 @@ def _get_or_create_sources_generic(
 ) -> Dict[str, int]:
     """
     크레딧 획득, 소모 소스 공통 처리 함수 (최적화된 락 사용)
-    :param engine: DB 엔진
-    :param items: 소스 이름 리스트
-    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너리
-    :param model: SQLAlchemy 모델 클래스
-    :param table_name: DB 테이블 이름
-    :return: {source_name: source_id} 매핑 딕셔너리
     """
     if not items:
         return {}
@@ -224,40 +217,46 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
         logger.error(f"Failed to save table '{table_name}': {e}")
         raise
 
-def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
+def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]):
     """
-    파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장
+    파싱된 데이터(딕셔너리 리스트) 딕셔너리를 DB의 각 테이블에 저장
+    Pandas 제거 및 List[Dict] 기반 처리
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
-        df = parsed_data['match_user_credit_acquisitions']
-        if not df.empty and 'acquisition_source' in df.columns:
-            unique_sources = df['acquisition_source'].unique().tolist()
+        data_list = parsed_data['match_user_credit_acquisitions']
+        if data_list:
+            unique_sources = list({item['acquisition_source'] for item in data_list if 'acquisition_source' in item})
             source_map = _get_or_create_acquisition_sources(engine, unique_sources)
             
-            # ID로 매핑
-            df['acquisition_source_id'] = df['acquisition_source'].map(source_map)
+            valid_list = []
+            for item in data_list:
+                src = item.pop('acquisition_source', None)
+                if src and src in source_map:
+                    item['acquisition_source_id'] = source_map[src]
+                    valid_list.append(item)
             
-            # 원본 컬럼 및 알 수 없는 소스 제거
-            df.drop(columns=['acquisition_source'], inplace=True)
-            df.dropna(subset=['acquisition_source_id'], inplace=True)
+            parsed_data['match_user_credit_acquisitions'] = valid_list
 
     # 크레딧 소모 소스 매핑
     if 'match_user_credit_expenditures' in parsed_data:
-        df = parsed_data['match_user_credit_expenditures']
-        if not df.empty and 'expenditure_item' in df.columns:
-            unique_items = df['expenditure_item'].unique().tolist()
-            # None 값 제거(문자열만 처리)
-            unique_items = [str(x) for x in unique_items if x is not None and str(x).strip()]
-            
+        data_list = parsed_data['match_user_credit_expenditures']
+        if data_list:
+            unique_items = list({
+                str(item['expenditure_item']) 
+                for item in data_list 
+                if item.get('expenditure_item') is not None and str(item['expenditure_item']).strip()
+            })
             source_map = _get_or_create_expenditure_sources(engine, unique_items)
             
-            # ID로 매핑
-            df['expenditure_source_id'] = df['expenditure_item'].astype(str).map(source_map)
+            valid_list = []
+            for item in data_list:
+                item_val = item.pop('expenditure_item', None)
+                if item_val is not None and str(item_val) in source_map:
+                    item['expenditure_source_id'] = source_map[str(item_val)]
+                    valid_list.append(item)
             
-            # 원본 컬럼 및 알 수 없는 소스 제거
-            df.drop(columns=['expenditure_item'], inplace=True)
-            df.dropna(subset=['expenditure_source_id'], inplace=True)
+            parsed_data['match_user_credit_expenditures'] = valid_list
             
     # 저장할 모든 테이블 목록
     all_tables = list(parsed_data.keys())
@@ -270,7 +269,7 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_save_single_dataframe, engine, table_name, parsed_data[table_name]): table_name
+            executor.submit(_save_single_list, engine, table_name, parsed_data[table_name]): table_name
             for table_name in all_tables
         }
         
