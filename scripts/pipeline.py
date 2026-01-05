@@ -62,17 +62,17 @@ async def run_pipeline():
     데이터 수집 파이프라인
     1. 활성 유저 유무 확인
     2. 유저가 없으면(초기 상태) 자동으로 시드 데이터(Top Rankers) 수집
-    3. 유저가 있으면 기존 크롤링(스노우볼링) 로직 수행
+    3. 유저가 있으면 기존 크롤링(스노우볼링) 로직 수행(Queue 기반 비동기 처리)
     """
     pipeline_start_time = time()
-    logger.info("--- Start Pipeline ---")
+    logger.info("--- Start Pipeline (Async Queue) ---")
     log_memory()
     
     # 스토리지 및 DB 초기화
     storage = get_storage(ENV)
     engine = get_engine()
 
-    # 1. 활성 유저 확인
+    # 1. 활성 유저 확인 / 시드 데이터 수집
     step_start_time = time()
     active_users = get_active_users(engine)
     logger.info(f"Initial Check: Found {len(active_users)} active users.")
@@ -120,6 +120,7 @@ async def run_pipeline():
             new_matches = user_result['matches']
             user_match_map[uid] = new_matches
             all_new_match_ids.update(new_matches)
+        
         logger.info(f"Step 2: Collecting user games finished in {time() - step_start_time:.2f}s")
         log_memory()
         
@@ -140,136 +141,30 @@ async def run_pipeline():
             return
 
         total_matches = len(final_match_ids_to_process)
-        logger.info(f"Found {total_matches} new unique matches to process. Starting batch processing...")
+        logger.info(f"Found {total_matches} new unique matches to process. Starting Queue Processing...")
 
-        # 배치별 매치 데이터 수집 및 저장
-        # BATCH_SIZE는 config.py에서 로드
-        for i in range(0, total_matches, BATCH_SIZE):
-            batch_match_ids = final_match_ids_to_process[i:i + BATCH_SIZE]
-            logger.info(f"--- Processing Batch {i // BATCH_SIZE + 1} / {(total_matches - 1) // BATCH_SIZE + 1} ({len(batch_match_ids)} matches) ---")
-            
-            batch_start_time = time()
-            
-            # 새로운 매치 데이터 수집
-            raw_match_data_list = []
-            batch_participant_nicknames = set()
-            
-            match_data_generator = client.get_match_infos_async(batch_match_ids)
-            async for match_id, raw_data in match_data_generator:
-                if raw_data and 'userGames' in raw_data:
-                    raw_match_data_list.append((match_id, raw_data))
-                    for user in raw_data['userGames']:
-                        batch_participant_nicknames.add(user['nickname'])
-            
-            # 원본 매치데이터를 데이터 레이크에 저장
-            if raw_match_data_list:
-                now = datetime.now()
-                timestamp = now.strftime("%Y%m%d_%H%M%S")
-                # 저장 경로 (S3 Key 또는 로컬 경로)
-                # 예: data/raw/20231027/batch_0_123456.json 형태로 저장
-                date_str = now.strftime("%Y%m%d")
-                filename = f"data/raw/{date_str}/batch_{i}_{timestamp}.json"
-                
-                # 저장 데이터 준비
-                data_to_save = [data for _, data in raw_match_data_list]
-                
-                # 스토리지 추상화를 통해 저장
-                storage.save(data_to_save, filename)
+        # 3. 큐 기반 처리(Producer-Consumer 패턴)
+        queue = asyncio.Queue(maxsize=3) # 버퍼 크기: 배치 3개
+        
+        producer_task = asyncio.create_task(produce_batches(
+            client, final_match_ids_to_process, queue, engine, storage
+        ))
+        consumer_task = asyncio.create_task(consume_batches(engine, queue))
+        
+        # 생산자 작업 완료 대기
+        await producer_task
+        
+        # 큐의 모든 작업이 처리될 때까지 대기
+        await queue.join()
+        
+        # 소비자 작업 종료
+        consumer_task.cancel()
+        try:
+            await consumer_task
+        except asyncio.CancelledError:
+            pass
 
-            # uid 조회 로직(DB 우선 조회)
-            all_nicknames_list = list(batch_participant_nicknames)
-            existing_users_map = get_uids_by_nicknames(engine, all_nicknames_list)
-            unknown_nicknames = [nick for nick in all_nicknames_list if nick not in existing_users_map]
-            
-            new_user_infos = []
-            if unknown_nicknames:
-                logger.info(f"Fetching {len(unknown_nicknames)} unknown nicknames from API...")
-                new_user_infos = await client.get_users_by_nickname_async(unknown_nicknames)
-            
-            nickname_to_uid_map = existing_users_map.copy()
-            for user in new_user_infos:
-                nickname_to_uid_map[user['nickname']] = user['userId']
-
-            # 파싱 데이터 정리
-            all_new_participants = []
-            all_parsed_data = [] # List[Dict[str, List[Dict]]]
-
-            for match_id, raw_data in raw_match_data_list:
-                try:
-                    valid_user_games = []
-                    for user_game in raw_data['userGames']:
-                        nickname = user_game['nickname']
-                        if nickname in nickname_to_uid_map:
-                            user_game['uid'] = nickname_to_uid_map[nickname]
-                            valid_user_games.append(user_game)
-                    raw_data['userGames'] = valid_user_games
-                    
-                    # 신규 유저 정보 수집(DB Upsert용)
-                    for user_info in new_user_infos:
-                        if any(u['nickname'] == user_info['nickname'] for u in raw_data['userGames']):
-                            all_new_participants.append({'uid': user_info['userId'], 'nickname': user_info['nickname']})
-                    if raw_data['userGames']:
-                        parsed_data = parse_match_data(raw_data)
-                        all_parsed_data.append(parsed_data)
-                except Exception as e:
-                    logger.error(f"Failed to process match {match_id}: {e}")
-
-            # 신규 유저 저장
-            if all_new_participants:
-                unique_participants = list({p['uid']: p for p in all_new_participants}.values())
-                upsert_users(engine, unique_participants)
-
-            # 현재 배치의 모든 유저 uid 수집
-            batch_uids = set()
-            for _, raw_data in raw_match_data_list:
-                if 'userGames' in raw_data:
-                    for user_game in raw_data['userGames']:
-                        if 'uid' in user_game:
-                            batch_uids.add(user_game['uid'])
-            
-            uid_to_user_num = get_user_num_map_by_uids(engine, list(batch_uids))
-
-            # 매치 데이터 저장
-            if all_parsed_data:
-                combined_data = {} # Dict[str, List[Dict]]
-                for parsed_data_map in all_parsed_data:
-                    for table_name, data_list in parsed_data_map.items():
-                        if table_name not in combined_data:
-                            combined_data[table_name] = []
-                        
-                        # uid -> user_num 매핑 및 필터링
-                        if data_list and 'uid' in data_list[0]:
-                            valid_rows = []
-                            for row in data_list:
-                                uid = row.get('uid')
-                                if uid in uid_to_user_num:
-                                    row['user_num'] = uid_to_user_num[uid]
-                                    # uid 필드 제거
-                                    row.pop('uid', None)
-                                    valid_rows.append(row)
-                                else:
-                                    # 매핑 실패한 행은 스킵
-                                    pass
-                            
-                            if valid_rows:
-                                combined_data[table_name].extend(valid_rows)
-                            elif data_list:
-                                missing_count = len(data_list)
-                                logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
-                        else:
-                            combined_data[table_name].extend(data_list)
-                
-                # 저장
-                save_data_to_db(engine, combined_data)
-            
-            logger.info(f"Batch finished in {time() - batch_start_time:.2f}s")
-            
-            # 메모리 정리
-            del raw_match_data_list, all_parsed_data, new_user_infos
-            gc.collect()
-            log_memory() 
-
-    # 각 유저의 last_match_id 갱신(전체 루프 종료 후 한 번만)
+    # 4. 각 유저의 last_match_id 갱신(전체 루프 종료 후 한 번만)
     step_start_time = time()
     logger.info("Updating last_match_id for processed users...")
     
