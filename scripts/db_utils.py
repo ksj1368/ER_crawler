@@ -220,7 +220,6 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
 def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]):
     """
     파싱된 데이터(딕셔너리 리스트) 딕셔너리를 DB의 각 테이블에 저장
-    Pandas 제거 및 List[Dict] 기반 처리
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
