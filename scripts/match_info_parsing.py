@@ -3,7 +3,6 @@ from typing import Dict, List, Tuple
 import copy
 import json
 from collections import Counter
-import pandas as pd
 from scripts.config import CREDIT_ACQUISITIONS_PATH, CREDIT_EXPENDITURES_PATH, OBJECT_METRICS_PATH
 
 def _load_json_mappings():
@@ -52,7 +51,7 @@ def top_ranker_nicknames(data: dict) -> List[str]:
     """
     return [rank['nickname'] for rank in data.get('topRanks', [])]
 
-def parse_match_info(data: dict) -> pd.DataFrame:
+def parse_match_info(data: dict) -> List[Dict]:
     """
     매치 기본 정보 파싱
     """
@@ -86,9 +85,9 @@ def parse_match_info(data: dict) -> pd.DataFrame:
         "restricted_area_accelerated": u.get("restrictedAreaAccelerated", 0),
     }
     
-    return pd.DataFrame([match_info])
+    return [match_info]
 
-def parse_match_team_info(data: dict) -> pd.DataFrame:
+def parse_match_team_info(data: dict) -> List[Dict]:
     """
     팀 정보 파싱
     """
@@ -133,9 +132,9 @@ def parse_match_team_info(data: dict) -> pd.DataFrame:
         team_info_list.append(team_info)
         processed_team_ids.add(team_id)
     
-    return pd.DataFrame(team_info_list)
+    return team_info_list
 
-def parse_match_user_start(data: dict) -> pd.DataFrame:
+def parse_match_user_start(data: dict) -> List[Dict]:
     """
     게임 시작 전 유저 정보와 게임 정보를 파싱
     """
@@ -158,9 +157,9 @@ def parse_match_user_start(data: dict) -> pd.DataFrame:
             "ml_bot": u.get("mlbot", False)
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_basic_list)
+    return user_basic_list
 
-def parse_match_user_end(data: dict) -> pd.DataFrame:
+def parse_match_user_end(data: dict) -> List[Dict]:
     """
     게임 종료 후 유저 기본 정보 파싱
     """
@@ -195,9 +194,9 @@ def parse_match_user_end(data: dict) -> pd.DataFrame:
             "is_leaving_before_credit_revival_terminate": u.get("isLeavingBeforeCreditRevivalTerminate", False),
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_basic_list)
+    return user_basic_list
 
-def parse_match_user_combat(data: dict) -> pd.DataFrame:
+def parse_match_user_combat(data: dict) -> List[Dict]:
     """
     유저 전투 정보 파싱
     """
@@ -228,9 +227,9 @@ def parse_match_user_combat(data: dict) -> pd.DataFrame:
             "tactical_skill_count": u.get("tacticalSkillUseCount", 0),
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_combat_list)
+    return user_combat_list
 
-def parse_match_user_trait(data: dict) -> pd.DataFrame:
+def parse_match_user_trait(data: dict) -> List[Dict]:
     """
     유저 특성 정보 파싱
     """
@@ -242,9 +241,9 @@ def parse_match_user_trait(data: dict) -> pd.DataFrame:
             user_traits_list.append({"match_id": match_id, "uid": uid, "trait_id": int(trait_id), "trait_type": "first_sub"})
         for trait_id in u.get("traitSecondSub", []):
             user_traits_list.append({"match_id": match_id, "uid": uid, "trait_id": int(trait_id), "trait_type": "second_sub"})
-    return pd.DataFrame(user_traits_list)
+    return user_traits_list
 
-def parse_match_user_damage(data: dict) -> pd.DataFrame:
+def parse_match_user_damage(data: dict) -> List[Dict]:
     """
     유저 데미지 정보 파싱
     """
@@ -283,9 +282,9 @@ def parse_match_user_damage(data: dict) -> pd.DataFrame:
             "protect_absorb": u.get("protectAbsorb", 0)
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_damage_list)
+    return user_damage_list
 
-def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
+def parse_match_user_credit_acquisitions(data: dict) -> List[Dict]:
     """
     크레딧 획득 정보 파싱
     """
@@ -302,9 +301,9 @@ def parse_match_user_credit_acquisitions(data: dict) -> pd.DataFrame:
                 "match_id": u["gameId"], "uid": u["uid"], "acquisition_source": source,
                 "acquisition_type": acq_type, "credit_amount": float(amount), "source_category": src_cat
             })
-    return pd.DataFrame(acquisition_list)
+    return acquisition_list
 
-def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
+def parse_match_user_credit_expenditures(data: dict) -> List[Dict]:
     """
     크레딧 소모 정보 파싱 (시간 복잡도 개선)
     """
@@ -420,9 +419,9 @@ def parse_match_user_credit_expenditures(data: dict) -> pd.DataFrame:
                     "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count,
                     "order_seq": item_counter["etc"]
                 })
-    return pd.DataFrame(expenditure_list)
+    return expenditure_list
 
-def parse_match_user_stats(data: dict) -> pd.DataFrame:
+def parse_match_user_stats(data: dict) -> List[Dict]:
     """
     유저 스탯 정보 파싱
     """
@@ -441,9 +440,9 @@ def parse_match_user_stats(data: dict) -> pd.DataFrame:
             "skill_life_steal": int(100*u.get("skillLifesteal",0))
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_stats_list)
+    return user_stats_list
 
-def parse_match_user_equipment(data: dict) -> pd.DataFrame:
+def parse_match_user_equipment(data: dict) -> List[Dict]:
     """
     유저 장비 정보 파싱
     """
@@ -469,9 +468,9 @@ def parse_match_user_equipment(data: dict) -> pd.DataFrame:
             "best_weapon_level": u.get("bestWeaponLevel", 0)
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_equipment_list)
+    return user_equipment_list
 
-def parse_match_user_mmr(data: dict) -> pd.DataFrame:
+def parse_match_user_mmr(data: dict) -> List[Dict]:
     """
     MMR 정보 파싱
     """
@@ -483,9 +482,9 @@ def parse_match_user_mmr(data: dict) -> pd.DataFrame:
             "mmr_loss_entry_cost": u.get("mmrLossEntryCost", 0), "rank_point": u.get("rankPoint", 0)
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_mmr_list)
+    return user_mmr_list
 
-def parse_object(data: dict) -> pd.DataFrame:
+def parse_object(data: dict) -> List[Dict]:
     """Long Format으로 오브젝트 정보 파싱"""
     object_list = []
     
@@ -512,9 +511,9 @@ def parse_object(data: dict) -> pd.DataFrame:
         for key, value in u.get("activeInstallation", {}).items():
             if value > 0:
                 object_list.append({"match_id": match_id, "uid": uid, "metric_type": "installation", "metric_name": int(key), "value": value})
-    return pd.DataFrame(object_list)
+    return object_list
 
-def parse_match_user_credit_time(data: dict) -> pd.DataFrame:
+def parse_match_user_credit_time(data: dict) -> List[Dict]:
     """분당 크레딧 정보 파싱"""
     user_credit_time_list = []
     for u in data.get("userGames", []):
@@ -523,9 +522,9 @@ def parse_match_user_credit_time(data: dict) -> pd.DataFrame:
             gain = u["totalVFCredits"][minute]
             if used != 0 or gain != 0:
                 user_credit_time_list.append({"match_id": u["gameId"], "uid": u["uid"], "minute": minute, "used_credit": used, "gain_credit": gain})
-    return pd.DataFrame(user_credit_time_list)
+    return user_credit_time_list
 
-def parse_match_user_sight(data: dict) -> pd.DataFrame:
+def parse_match_user_sight(data: dict) -> List[Dict]:
     """시야 정보 파싱"""
     user_sight_list = [
         {
@@ -535,19 +534,20 @@ def parse_match_user_sight(data: dict) -> pd.DataFrame:
             "basic_drone_setup": u["useReconDrone"]
         } for u in data.get("userGames", [])
     ]
-    return pd.DataFrame(user_sight_list)
+    return user_sight_list
 
-def parse_match_data(data: dict) -> Dict[str, pd.DataFrame]:
+def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
     """
     전체 매치 데이터 파싱
     """
     try:
         # match_user_start를 먼저 파싱하여 스노우볼링을 위한 uid/nickname mapping을 생성
-        df_user_start = parse_match_user_start(data)
-        parsed_dfs = {
+        # NOTE: 대소문자 주의 parse_match_user_Start -> parse_match_user_Start
+        user_start_list = parse_match_user_start(data)
+        parsed_data = {
             "match_info": parse_match_info(data),
             "match_team_info": parse_match_team_info(data),
-            "match_user_start": df_user_start,
+            "match_user_start": user_start_list,
             "match_user_end": parse_match_user_end(data),
             "match_user_trait": parse_match_user_trait(data),
             "match_user_combat": parse_match_user_combat(data),
@@ -561,7 +561,7 @@ def parse_match_data(data: dict) -> Dict[str, pd.DataFrame]:
             "match_user_equipment": parse_match_user_equipment(data),
             "match_user_mmr": parse_match_user_mmr(data)
         }
-        return parsed_dfs
+        return parsed_data
     except Exception as e:
         print(f"Error parsing match data: {e}")
         raise
