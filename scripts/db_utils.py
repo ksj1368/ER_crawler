@@ -12,9 +12,12 @@ from scripts.config import DATABASE_URL, DB_CHUNK_SIZE
 from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource, CreditExpenditureSource
 
 logger = logging.getLogger(__name__)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+# Connection Pool Tuning
+# pool_size: 유지할 커넥션 수 (기본 5)
+# max_overflow: pool_size를 초과하여 허용할 최대 커넥션 수
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, pool_size=20, max_overflow=20)
 
-# Global Caches for Source IDs (key: source_name, value: source_id)
+# 전역 변수 설정
 _ACQUISITION_SOURCE_ID_CACHE: Dict[str, int] = {}
 _EXPENDITURE_SOURCE_ID_CACHE: Dict[str, int] = {}
 _CACHE_LOCK = threading.Lock()
@@ -181,8 +184,7 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
     try:
         # Transaction 시작
         with engine.begin() as conn:
-            # 1. 외래키 체크 해제
-            conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
+            # 데이터 무결설 보장을 위해 FOREIGN_KEY_CHECKS=0 제거
             logger.info(f"Inserting {total_rows} rows into '{table_name}' (Chunk size: {DB_CHUNK_SIZE})")
 
             is_raw_sql = table_name not in Base.metadata.tables
@@ -196,28 +198,25 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
                     # SQL 예약어와 충돌하지 않도록 컬럼 이름을 '`'로 감싸기
                     columns = ', '.join([f"`{key}`" for key in keys])
                     placeholders = ', '.join([f":{key}" for key in keys])
-                    raw_stmt = text(f"INSERT INTO `{table_name}` ({columns}) VALUES ({placeholders})")
+                    # INSERT IGNORE 적용 (Raw SQL)
+                    raw_stmt = text(f"INSERT IGNORE INTO `{table_name}` ({columns}) VALUES ({placeholders})")
 
-            try:
-                # 2. 데이터 삽입 로직
-                for start_idx in range(0, total_rows, DB_CHUNK_SIZE):
-                    end_idx = start_idx + DB_CHUNK_SIZE
-                    chunk = data_list[start_idx:end_idx]
-                    
-                    if not chunk:
-                        continue
+            # 2. 데이터 삽입 로직
+            for start_idx in range(0, total_rows, DB_CHUNK_SIZE):
+                end_idx = start_idx + DB_CHUNK_SIZE
+                chunk = data_list[start_idx:end_idx]
+                
+                if not chunk:
+                    continue
 
-                    if not is_raw_sql:
-                        table = Base.metadata.tables[table_name]
-                        stmt = insert(table).values(chunk)
-                        conn.execute(stmt)
-                    else:
-                        if raw_stmt:
-                             conn.execute(raw_stmt, chunk)
-            
-            finally:
-                # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
-                conn.execute(text("SET FOREIGN_KEY_CHECKS=1;"))
+                if not is_raw_sql:
+                    table = Base.metadata.tables[table_name]
+                    # INSERT IGNORE 적용 (SQLAlchemy Core)
+                    stmt = insert(table).prefix_with("IGNORE").values(chunk)
+                    conn.execute(stmt)
+                else:
+                    if raw_stmt:
+                            conn.execute(raw_stmt, chunk)
             
     except Exception as e:
         logger.error(f"Failed to save table '{table_name}': {e}")
@@ -226,6 +225,26 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
 def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]):
     """
     파싱된 데이터(딕셔너리 리스트) 딕셔너리를 DB의 각 테이블에 저장
+    순서 보장: match_info (Parent) -> Others (Children)
+    병렬 처리: ThreadPoolExecutor 사용
+    1. 크레딧 획득/소모 소스 매핑
+    2. match_info 저장 (부모 테이블이므로 가장 먼저 저장)
+    3. 나머지 테이블 병렬 저장
+    4. 예외 처리 및 로깅
+    5. 환경 변수 DB_MAX_WORKERS로 워커 수 제어 (기본값 2)
+    6. DB_CHUNK_SIZE로 배치 삽입 크기
+    :param engine: SQLAlchemy 엔진
+    :param parsed_data: {'table_name': [row_dict, ...], ...}
+    7. 예외 발생 시 전체 저장 중단
+    8. 각 단계별 로깅
+    9. 불필요한 DB 접근 최소화
+    10. 스레드 안전한 캐시 사용
+    11. Raw SQL 삽입 지원
+    12. 삽입 전 데이터 유효성 검사
+    13. 삽입 후 결과 요약 로깅
+    14. 삽입 실패 시 재시도 메커니즘 고려
+    15. 대량 데이터 삽입 시 메모리 사용 최적화
+    16. 삽입 전후 타임스탬프 로깅
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
@@ -269,6 +288,20 @@ def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]
     if not all_tables:
         return
 
+    # 1. Match Info 저장 (Parent Table - Must save first)
+    if 'match_info' in parsed_data:
+        try:
+            _save_single_list(engine, 'match_info', parsed_data['match_info'])
+        except Exception as e:
+            logger.error(f"Failed to save match_info (Parent). Aborting batch save. Error: {e}")
+            raise e
+        
+        # 이미 저장했으므로 병렬 처리 대상에서 제외
+        if 'match_info' in parsed_data:
+             del parsed_data['match_info']
+        all_tables.remove('match_info')
+
+    # 2. 나머지 테이블 병렬 저장
     # 워커 수를 환경 변수로 제어 (기본값: 2로 상향 조정하여 병렬 처리 활성화)
     max_workers = int(os.getenv("DB_MAX_WORKERS", 2))
     
