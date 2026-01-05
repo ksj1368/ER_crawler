@@ -50,7 +50,7 @@ else:
 
 # SQLAlchemy Connection URL
 if DB_USER and DB_PASSWORD and DB_HOST:
-    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 
 # Tuning Configuration
 DB_CHUNK_SIZE = int(os.getenv("DB_CHUNK_SIZE", 5000))
