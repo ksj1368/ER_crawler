@@ -172,47 +172,49 @@ def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict
         "credit_expenditure_source"
     )
 
-def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
-    """단일 데이터프레임을 DB에 저장하는 함수"""
-    if df.empty:
+def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str, Any]]):
+    """단일 리스트를 DB에 저장하는 함수"""
+    if not data_list:
         return
     
-    CHUNK_SIZE = 5000
+    total_rows = len(data_list)
     
     try:
-        # DB NULL 처리를 위해 NaN을 None으로 변환 
-        df_obj = df.astype(object).where(pd.notnull(df), None)
-        total_rows = len(df_obj)
-        
         # Transaction 시작
         with engine.begin() as conn:
-            # 1. 외래키 체크 해제(대량 삽입 속도 향상 및 순서 문제 회피)
+            # 1. 외래키 체크 해제
             conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
-            logger.info(f"Inserting {total_rows} rows into '{table_name}' (Chunk size: {CHUNK_SIZE})")
+            logger.info(f"Inserting {total_rows} rows into '{table_name}' (Chunk size: {DB_CHUNK_SIZE})")
+
+            is_raw_sql = table_name not in Base.metadata.tables
+            raw_stmt = None
+            
+            if is_raw_sql:
+                # 키를 추출하기 전에 추출 대상 데이터가 실제로 존재하는지 확인
+                if total_rows > 0: 
+                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                    keys = data_list[0].keys()
+                    # SQL 예약어와 충돌하지 않도록 컬럼 이름을 '`'로 감싸기
+                    columns = ', '.join([f"`{key}`" for key in keys])
+                    placeholders = ', '.join([f":{key}" for key in keys])
+                    raw_stmt = text(f"INSERT INTO `{table_name}` ({columns}) VALUES ({placeholders})")
 
             try:
-                # 2. 데이터 삽입 로직 (Chunk 단위 처리)
-                for start_idx in range(0, total_rows, CHUNK_SIZE):
-                    end_idx = start_idx + CHUNK_SIZE
-                    chunk = df_obj.iloc[start_idx:end_idx]
-                    data_to_insert = chunk.to_dict(orient='records')
+                # 2. 데이터 삽입 로직
+                for start_idx in range(0, total_rows, DB_CHUNK_SIZE):
+                    end_idx = start_idx + DB_CHUNK_SIZE
+                    chunk = data_list[start_idx:end_idx]
                     
-                    if not data_to_insert:
+                    if not chunk:
                         continue
 
-                    if table_name in Base.metadata.tables:
+                    if not is_raw_sql:
                         table = Base.metadata.tables[table_name]
-                        stmt = insert(table).values(data_to_insert)
+                        stmt = insert(table).values(chunk)
                         conn.execute(stmt)
                     else:
-                        if start_idx == 0:
-                            logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
-                        keys = data_to_insert[0].keys()
-                        columns = ', '.join(keys)
-                        placeholders = ', '.join([f":{key}" for key in keys])
-                        
-                        stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-                        conn.execute(stmt, data_to_insert)
+                        if raw_stmt:
+                             conn.execute(raw_stmt, chunk)
             
             finally:
                 # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
