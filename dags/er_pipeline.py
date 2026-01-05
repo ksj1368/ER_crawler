@@ -7,8 +7,6 @@ import sys
 # scripts 모듈을 임포트할 수 있도록 /opt/airflow를 sys.path에 추가
 sys.path.append('/opt/airflow')
 
-from scripts.main import run_full_process
-
 # 기본 인자 설정
 default_args = {
     'owner': 'airflow',
@@ -22,6 +20,7 @@ default_args = {
 # PythonOperator를 위한 비동기 실행 래퍼
 def run_task():
     """비동기 파이프라인 함수 실행을 위한 래퍼"""
+    from scripts.main import run_full_process
     asyncio.run(run_full_process())
 
 with DAG(
