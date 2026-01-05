@@ -14,7 +14,6 @@ MySQL 스키마에 맞는 형태로 변환하는 모듈
 """
 from typing import Dict, List, Any
 import json
-import pandas as pd
 from scripts.crawler import ERAPIClient
 from scripts.config import GAME_METADATA_PATH
 
@@ -34,7 +33,7 @@ def weapon_type() -> Dict[str, Any]:
 def tactical_type() -> Dict[str, Any]:
     return {int(k): v for k, v in GAME_METADATA.get("tactical_skills", {}).items()}
 
-def parse_area_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_area_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     area_list =[]
     for area in data.get('data', []):
         area_info = {
@@ -46,9 +45,9 @@ def parse_area_info(data: Dict[str, Any], season: int = 8, major_version: int = 
         }
         area_list.append(area_info)
     
-    return pd.DataFrame(area_list)
+    return area_list
     
-def parse_from_l10n(data: list, parse_key: str, season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_from_l10n(data: list, parse_key: str, season: int = 8, major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     """특정 구분자(┃)로 구분된 텍스트에서 특성 관련 정보를 trait_id-trait_name 형식의 딕셔너리로 변환
 
     Args:
@@ -56,25 +55,27 @@ def parse_from_l10n(data: list, parse_key: str, season: int = 8, major_version: 
         txt_mapping (Dict[str, str]): 특성 코드에 대응하는 이름 매핑 딕셔너리
 
     Returns:
-        pd.DataFrame: 각 특성의 ID와 이름을 담은 딕셔너리 리스트
+        List[Dict]: 각 특성의 ID와 이름을 담은 딕셔너리 리스트
     """    
     data_list = []    
     txt_key = f"{parse_key.capitalize()}/Name/"
     for d in data:
         if txt_key in d:
-            data_id, data_name = d.replace(f"{parse_key.capitalize()}/Name/", "").split("┃")
-            parsing_dict = {
-                'season': season,
-                'major_version': major_version,
-                'minor_version': minor_version,
-                f'{parse_key}_id': int(data_id),
-                f"{parse_key}_name": data_name,
-            }      
-            data_list.append(parsing_dict)
+            parts = d.replace(f"{parse_key.capitalize()}/Name/", "").split("┃")
+            if len(parts) >= 2:
+                data_id, data_name = parts[0], parts[1]
+                parsing_dict = {
+                    'season': season,
+                    'major_version': major_version,
+                    'minor_version': minor_version,
+                    f'{parse_key}_id': int(data_id),
+                    f"{parse_key}_name": data_name,
+                }      
+                data_list.append(parsing_dict)
 
-    return pd.DataFrame(data_list)
+    return data_list
 
-def parse_character_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_character_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     """
     Character.json을 파싱하여 characterinfo 테이블 형태로 변환
     
@@ -84,7 +85,7 @@ def parse_character_info(data: Dict[str, Any], season: int = 8, major_version: i
         minor_version (int): 마이너 버전 (기본값: 50)
         
     Returns:
-        pd.DataFrame: characterinfo 테이블용 레코드 리스트
+        List[Dict]: characterinfo 테이블용 레코드 리스트
     """
     character_list = []
     
@@ -109,10 +110,10 @@ def parse_character_info(data: Dict[str, Any], season: int = 8, major_version: i
         }
         character_list.append(character_info)
     
-    return pd.DataFrame(character_list)
+    return character_list
 
 
-def parse_character_levelup_stats(data: Dict[str, Any]) -> pd.DataFrame:
+def parse_character_levelup_stats(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     CharacterLevelUpStat.json을 파싱하여 characterlevelupstats 테이블 형태로 변환
     
@@ -120,7 +121,7 @@ def parse_character_levelup_stats(data: Dict[str, Any]) -> pd.DataFrame:
         data (Dict): CharacterLevelUpStat.json 로드 결과
         
     Returns:
-        pd.DataFrame: characterlevelupstats 테이블용 레코드 리스트
+        List[Dict]: characterlevelupstats 테이블용 레코드 리스트
     """
     levelup_list = []
     
@@ -134,10 +135,10 @@ def parse_character_levelup_stats(data: Dict[str, Any]) -> pd.DataFrame:
         }
         levelup_list.append(levelup_info)
     
-    return pd.DataFrame(levelup_list)
+    return levelup_list
 
 
-def parse_item_weapon(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_item_weapon(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     """
     ItemWeapon.json을 파싱하여 itemweapon 테이블 형태로 변환
     
@@ -147,7 +148,7 @@ def parse_item_weapon(data: Dict[str, Any], season: int = 8, major_version: int 
         minor_version (int): 마이너 버전 (기본값: 50)
         
     Returns:
-        pd.DataFrame: itemweapon 테이블용 레코드 리스트
+        List[Dict]: itemweapon 테이블용 레코드 리스트
     """
     weapon_list = []
     
@@ -174,10 +175,10 @@ def parse_item_weapon(data: Dict[str, Any], season: int = 8, major_version: int 
         }
         weapon_list.append(weapon_info)
     
-    return pd.DataFrame(weapon_list)
+    return weapon_list
 
 
-def parse_item_armor(data: Dict[str, Any], season: int = 8,major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_item_armor(data: Dict[str, Any], season: int = 8,major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     """
     ItemArmor.json을 파싱하여 itemarmor 테이블 형태로 변환
     
@@ -187,7 +188,7 @@ def parse_item_armor(data: Dict[str, Any], season: int = 8,major_version: int = 
         minor_version (int): 마이너 버전 (기본값: 50)
         
     Returns:
-        pd.DataFrame: itemarmor 테이블용 레코드 리스트
+        List[Dict]: itemarmor 테이블용 레코드 리스트
     """
     armor_list = []
     
@@ -219,10 +220,10 @@ def parse_item_armor(data: Dict[str, Any], season: int = 8,major_version: int = 
         }
         armor_list.append(armor_info)
     
-    return pd.DataFrame(armor_list)
+    return armor_list
 
 
-def parse_monster_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> pd.DataFrame:
+def parse_monster_info(data: Dict[str, Any], season: int = 8, major_version: int = 1, minor_version: int = 50) -> List[Dict[str, Any]]:
     """
     Monster.json을 파싱하여 monsterinfo 테이블 형태로 변환하고 중복을 제거합니다.
     
@@ -230,39 +231,33 @@ def parse_monster_info(data: Dict[str, Any], season: int = 8, major_version: int
         data (Dict): Monster.json 로드 결과
         
     Returns:
-        pd.DataFrame: monsterinfo 테이블용 레코드 리스트 (중복 제거됨)
+        List[Dict]: monsterinfo 테이블용 레코드 리스트 (중복 제거됨)
     """
-    monster_list = []
+    monster_map = {} # monster_id를 키로 사용하여 중복 제거
     
     for monster in data.get('data', []):
-        monster_info = {
-            'season': season,
-            'major_version': major_version,
-            'minor_version': minor_version,
-            'monster_id': monster['code'],
-            'monster_name': monster['monster'],
-            'monster_grade': monster.get('grade', 'Unknown'),
-            'is_mutant': bool(monster.get('isMutant', False)),
-            'max_hp': int(monster.get('maxHp', 0)),
-            'attack_power': int(monster.get('attackPower', 0)),
-            'defense': int(monster.get('defense', 0)),
-            'attack_speed': float(monster.get('attackSpeed', 0.0)),
-            'move_speed': float(monster.get('moveSpeed', 0.0)),
-            'attack_range': float(monster.get('attackRange', 0.0)),
-            'sight_range': int(monster.get('sightRange', 0)),
-            'gain_exp': int(monster.get('gainExp', 0))
-        }
-        monster_list.append(monster_info)
+        code = monster['code']
+        if code not in monster_map:
+            monster_info = {
+                'season': season,
+                'major_version': major_version,
+                'minor_version': minor_version,
+                'monster_id': code,
+                'monster_name': monster['monster'],
+                'monster_grade': monster.get('grade', 'Unknown'),
+                'is_mutant': bool(monster.get('isMutant', False)),
+                'max_hp': int(monster.get('maxHp', 0)),
+                'attack_power': int(monster.get('attackPower', 0)),
+                'defense': int(monster.get('defense', 0)),
+                'attack_speed': float(monster.get('attackSpeed', 0.0)),
+                'move_speed': float(monster.get('moveSpeed', 0.0)),
+                'attack_range': float(monster.get('attackRange', 0.0)),
+                'sight_range': int(monster.get('sightRange', 0)),
+                'gain_exp': int(monster.get('gainExp', 0))
+            }
+            monster_map[code] = monster_info
     
-    # 리스트가 비어있으면 빈 데이터프레임 반환
-    if not monster_list:
-        return pd.DataFrame()
-
-    # 데이터프레임 생성 후 'monster_id' 기준으로 중복 제거
-    df = pd.DataFrame(monster_list)
-    df.drop_duplicates(subset=['monster_id'], keep='first', inplace=True)
-    
-    return df
+    return list(monster_map.values())
 
 
 async def parse_all_meta_files(
@@ -271,7 +266,7 @@ async def parse_all_meta_files(
     season: int = 8, 
     major_version: int = 1, 
     minor_version: int = 50
-) -> Dict[str, pd.DataFrame]:
+) -> Dict[str, List[Dict[str, Any]]]:
     """
     모든 메타 정보 JSON 파일을 파싱하여 테이블별 레코드를 반환
     """
