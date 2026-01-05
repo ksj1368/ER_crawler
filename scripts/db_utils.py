@@ -67,6 +67,12 @@ def _get_or_create_sources_generic(
 ) -> Dict[str, int]:
     """
     크레딧 획득, 소모 소스 공통 처리 함수 (최적화된 락 사용)
+    :param engine: DB 엔진
+    :param items: 소스 이름 리스트
+    :param cache: 소스 이름-아이디 매핑 캐시 딕셔너리
+    :param model: SQLAlchemy 모델 클래스
+    :param table_name: DB 테이블 이름
+    :return: {source_name: source_id} 매핑 딕셔너리
     """
     if not items:
         return {}
