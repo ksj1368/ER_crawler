@@ -4,14 +4,13 @@ import psutil
 import gc
 from time import time
 from datetime import datetime
-import pandas as pd
 
-from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV
+from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV, BATCH_SIZE
 from scripts.crawler import ERAPIClient
 from scripts.storage import get_storage
 from scripts.db_utils import (
     get_engine, deactivate_user, get_active_users, upsert_users, 
-    update_user_last_match_bulk, save_dataframes_to_db, check_match_exists, 
+    update_user_last_match_bulk, save_data_to_db, check_match_exists, 
     get_uids_by_nicknames, get_user_num_map_by_uids
 )
 from scripts.match_info_parsing import top_ranker_nicknames, parse_match_data
@@ -143,10 +142,8 @@ async def run_pipeline():
         total_matches = len(final_match_ids_to_process)
         logger.info(f"Found {total_matches} new unique matches to process. Starting batch processing...")
 
-        # 배치 처리
-        BATCH_SIZE = 100 # OOM 방지용
-
         # 배치별 매치 데이터 수집 및 저장
+        # BATCH_SIZE는 config.py에서 로드
         for i in range(0, total_matches, BATCH_SIZE):
             batch_match_ids = final_match_ids_to_process[i:i + BATCH_SIZE]
             logger.info(f"--- Processing Batch {i // BATCH_SIZE + 1} / {(total_matches - 1) // BATCH_SIZE + 1} ({len(batch_match_ids)} matches) ---")
@@ -195,7 +192,7 @@ async def run_pipeline():
 
             # 파싱 데이터 정리
             all_new_participants = []
-            all_parsed_data = []
+            all_parsed_data = [] # List[Dict[str, List[Dict]]]
 
             for match_id, raw_data in raw_match_data_list:
                 try:
@@ -234,33 +231,36 @@ async def run_pipeline():
 
             # 매치 데이터 저장
             if all_parsed_data:
-                combined_data = {}
-                for parsed_data in all_parsed_data:
-                    for table_name, df in parsed_data.items():
-                        
-                        if 'uid' in df.columns:
-                            # 매핑 적용
-                            df['user_num'] = df['uid'].map(uid_to_user_num)
-                            
-                            # 매핑 실패한 행 처리 (로깅 후 제거)
-                            if df['user_num'].isnull().any():
-                                missing_count = df['user_num'].isnull().sum()
-                                logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
-                                df.dropna(subset=['user_num'], inplace=True)
-                            
-                            # 타입 변환 및 uid 제거
-                            df['user_num'] = df['user_num'].astype(int)
-                            df.drop(columns=['uid'], inplace=True)
-
+                combined_data = {} # Dict[str, List[Dict]]
+                for parsed_data_map in all_parsed_data:
+                    for table_name, data_list in parsed_data_map.items():
                         if table_name not in combined_data:
                             combined_data[table_name] = []
-                        combined_data[table_name].append(df)
+                        
+                        # uid -> user_num 매핑 및 필터링
+                        if data_list and 'uid' in data_list[0]:
+                            valid_rows = []
+                            for row in data_list:
+                                uid = row.get('uid')
+                                if uid in uid_to_user_num:
+                                    row['user_num'] = uid_to_user_num[uid]
+                                    # uid 필드 제거
+                                    row.pop('uid', None)
+                                    valid_rows.append(row)
+                                else:
+                                    # 매핑 실패한 행은 스킵
+                                    pass
+                            
+                            if valid_rows:
+                                combined_data[table_name].extend(valid_rows)
+                            elif data_list:
+                                missing_count = len(data_list)
+                                logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
+                        else:
+                            combined_data[table_name].extend(data_list)
                 
-                for table_name, df_list in combined_data.items():
-                    if df_list:
-                        combined_data[table_name] = pd.concat(df_list, ignore_index=True)
-
-                save_dataframes_to_db(engine, combined_data)
+                # 저장
+                save_data_to_db(engine, combined_data)
             
             logger.info(f"Batch finished in {time() - batch_start_time:.2f}s")
             
