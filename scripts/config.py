@@ -61,7 +61,7 @@ else:
     # URL이 생성되지 않을 경우
     DATABASE_URL = None
     if ENV == "prod":
-         raise EnvironmentError("Failed to generate DATABASE_URL. Check DB settings.")
+        raise EnvironmentError("Failed to generate DATABASE_URL. Check DB settings.")
 
 # Tuning Configuration
 DB_CHUNK_SIZE = int(os.getenv("DB_CHUNK_SIZE", 5000))
