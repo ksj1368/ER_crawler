@@ -4,7 +4,7 @@ import psutil
 import gc
 from time import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV, BATCH_SIZE
 from scripts.crawler import ERAPIClient
@@ -57,23 +57,150 @@ async def seed_top_rankers():
     
     logger.info("--- Seeding top rankers finished ---")
 
-async def produce_batches(
-    client: ERAPIClient,
-    match_ids: List[int],
-    queue: asyncio.Queue,
-    engine,
-    storage
-):
+async def _fetch_and_save_raw_data(client, batch_match_ids, batch_index, storage) -> Tuple[List[Tuple[int, Dict[str, Any]]], set]:
+    """
+    API에서 매치 데이터를 수집하고 원본 데이터를 저장합니다.
+    반환값:
+    - raw_match_data_list: List of tuples (match_id, raw_data)
+    - batch_user_nicknames: Set of unique nicknames in the batch
+    """
+    raw_match_data_list = []
+    batch_user_nicknames = set()
+    
+    match_data_generator = client.get_match_infos_async(batch_match_ids)
+    async for match_id, raw_data in match_data_generator:
+        if raw_data and 'userGames' in raw_data:
+            raw_match_data_list.append((match_id, raw_data))
+            for user in raw_data['userGames']:
+                batch_user_nicknames.add(user['nickname'])
+    
+    if raw_match_data_list:
+        now = datetime.now()
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        # 저장 경로 (예: data/raw/20231027/batch_0_123456.json 형태로 저장)
+        date_str = now.strftime("%Y%m%d")
+        filename = f"data/raw/{date_str}/batch_{batch_index}_{timestamp}.json"
+        
+        # 저장 데이터 준비
+        data_to_save = [data for _, data in raw_match_data_list]
+        
+        # 스토리지 추상화를 통해 저장
+        storage.save(data_to_save, filename)
+        
+    return raw_match_data_list, batch_user_nicknames
+
+async def _identify_and_upsert_users(client, engine, batch_user_nicknames) -> Dict[str, str]:
+    """
+    유저를 식별하고 신규 유저를 DB에 등록합니다.
+    nickname_to_uid_map을 반환합니다.
+    1. 닉네임 목록으로 기존 유저 조회
+    2. 신규 닉네임에 대해 API 조회
+    3. 신규 유저 DB에 Upsert
+    4. 닉네임 -> uid 매핑 반환
+    """
+    all_nicknames_list = list(batch_user_nicknames)
+    existing_users_map = get_uids_by_nicknames(engine, all_nicknames_list)
+    unknown_nicknames = [nick for nick in all_nicknames_list if nick not in existing_users_map]
+    
+    new_user_infos = []
+    if unknown_nicknames:
+        logger.info(f"[Producer] Fetching {len(unknown_nicknames)} unknown nicknames from API...")
+        new_user_infos = await client.get_users_by_nickname_async(unknown_nicknames)
+    
+    nickname_to_uid_map = existing_users_map.copy()
+    for user in new_user_infos:
+        nickname_to_uid_map[user['nickname']] = user['userId']
+
+    if new_user_infos:
+        new_participants_to_upsert = [
+            {'uid': user['userId'], 'nickname': user['nickname']} 
+            for user in new_user_infos
+        ]
+        upsert_users(engine, new_participants_to_upsert)
+        
+    return nickname_to_uid_map
+
+def _parse_and_prepare_batch_data(engine, raw_match_data_list, nickname_to_uid_map) -> Dict[str, Any]:
+    """
+    매치 데이터를 파싱하고 DB 적재를 위해 데이터를 병합 및 변환합니다.
+    반환값:
+    - combined_data: Dict[str, List[Dict[str, Any]]], 테이블명
+        -> 해당 테이블에 적재할 데이터 리스트
+    1. 각 매치 데이터 파싱
+    2. uid -> user_num 매핑
+    3. uid 필드 제거 및 유효한 행만 남김
+    4. 테이블별로 데이터 병합
+    5. 누락된 user_num 매핑에 대한 로깅
+    6. 최종 데이터 반환
+    """
+    all_parsed_data = []
+
+    for match_id, raw_data in raw_match_data_list:
+        try:
+            valid_user_games = []
+            for user_game in raw_data['userGames']:
+                nickname = user_game['nickname']
+                if nickname in nickname_to_uid_map:
+                    user_game['uid'] = nickname_to_uid_map[nickname]
+                    valid_user_games.append(user_game)
+            raw_data['userGames'] = valid_user_games
+            
+            if raw_data['userGames']:
+                parsed_data = parse_match_data(raw_data)
+                all_parsed_data.append(parsed_data)
+        except Exception as e:
+            logger.error(f"[Producer] Failed to parse match {match_id}: {e}")
+
+    # UID -> user_num 매핑
+    batch_uids = set()
+    for _, raw_data in raw_match_data_list:
+        if 'userGames' in raw_data:
+            for user_game in raw_data['userGames']:
+                if 'uid' in user_game:
+                    batch_uids.add(user_game['uid'])
+    
+    uid_to_user_num = get_user_num_map_by_uids(engine, list(batch_uids))
+
+    combined_data = {}
+    if all_parsed_data:
+        for parsed_data_map in all_parsed_data:
+            for table_name, data_list in parsed_data_map.items():
+                if table_name not in combined_data:
+                    combined_data[table_name] = []
+                
+                # uid -> user_num 매핑 및 필터링
+                if data_list and 'uid' in data_list[0]:
+                    valid_rows = []
+                    for row in data_list:
+                        uid = row.get('uid')
+                        if uid in uid_to_user_num:
+                            row['user_num'] = uid_to_user_num[uid]
+                            # uid 필드 제거 (DB 스키마에 맞춤)
+                            row.pop('uid', None)
+                            valid_rows.append(row)
+                        else:
+                            # 매핑 실패한 행은 스킵
+                            pass
+                    
+                    if valid_rows:
+                        combined_data[table_name].extend(valid_rows)
+                    elif data_list:
+                        missing_count = len(data_list)
+                        logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
+                else:
+                    combined_data[table_name].extend(data_list)
+                    
+    return combined_data
+
+async def produce_batches(client: ERAPIClient, match_ids: List[int], queue: asyncio.Queue, engine, storage) -> None:
     """
     Producer: API에서 데이터를 가져와 파싱 후 Queue에 넣음
     1. 매치 ID를 배치 단위로 처리
     2. 각 배치에 대해:
-         - API에서 매치 데이터 수집
-            - 원본 데이터(Raw Data) 저장
-            - 유저 식별 (DB에 없는 닉네임 조회)
-            - 파싱 및 DB 적재 준비
-            - 큐(Queue)에 적재
-            - 원본 데이터와 파싱된 데이터를 함께 큐에 넣음
+         - API에서 매치 데이터 수집 및 원본 저장
+         - 유저 식별 (DB에 없는 닉네임 조회) 및 신규 유저 저장
+         - 파싱 및 데이터 변환 (uid -> user_num)
+         - 큐(Queue)에 적재
     3. 모든 배치 처리 후 종료
     """
     total_matches = len(match_ids)
@@ -84,125 +211,37 @@ async def produce_batches(
         
         batch_start_time = time()
         
-        # 1. API 데이터 수집 (새로운 매치 데이터)
-        raw_match_data_list = []
-        batch_user_nicknames = set()
+        # 1. API 데이터 수집 및 원본 저장
+        raw_match_data_list, batch_user_nicknames = await _fetch_and_save_raw_data(client, batch_match_ids, i, storage)
         
-        match_data_generator = client.get_match_infos_async(batch_match_ids)
-        async for match_id, raw_data in match_data_generator:
-            if raw_data and 'userGames' in raw_data:
-                raw_match_data_list.append((match_id, raw_data))
-                for user in raw_data['userGames']:
-                    batch_user_nicknames.add(user['nickname'])
+        if not raw_match_data_list:
+            logger.info(f"[Producer] Batch {i // BATCH_SIZE + 1} empty or failed. Skipping.")
+            continue
+
+        # 2. 유저 식별 및 Upsert
+        nickname_to_uid_map = await _identify_and_upsert_users(client, engine, batch_user_nicknames)
+
+        # 3. 파싱 및 DB 적재 데이터 준비
+        combined_data = _parse_and_prepare_batch_data(engine, raw_match_data_list, nickname_to_uid_map)
         
-        # 2. 원본 데이터(Raw Data) 저장 (데이터 레이크 용도)
-        if raw_match_data_list:
-            now = datetime.now()
-            timestamp = now.strftime("%Y%m%d_%H%M%S")
-            # 저장 경로 (예: data/raw/20231027/batch_0_123456.json 형태로 저장)
-            date_str = now.strftime("%Y%m%d")
-            filename = f"data/raw/{date_str}/batch_{i}_{timestamp}.json"
-            
-            # 저장 데이터 준비
-            data_to_save = [data for _, data in raw_match_data_list]
-            
-            # 스토리지 추상화를 통해 저장
-            storage.save(data_to_save, filename)
-
-        # 3. 유저 식별 (DB에 없는 닉네임 조회)
-        all_nicknames_list = list(batch_user_nicknames)
-        existing_users_map = get_uids_by_nicknames(engine, all_nicknames_list)
-        unknown_nicknames = [nick for nick in all_nicknames_list if nick not in existing_users_map]
-        
-        new_user_infos = []
-        if unknown_nicknames:
-            logger.info(f"[Producer] Fetching {len(unknown_nicknames)} unknown nicknames from API...")
-            new_user_infos = await client.get_users_by_nickname_async(unknown_nicknames)
-        
-        nickname_to_uid_map = existing_users_map.copy()
-        for user in new_user_infos:
-            nickname_to_uid_map[user['nickname']] = user['userId']
-
-        # 4. 파싱 및 DB 적재 준비
-        if new_user_infos:
-            new_participants_to_upsert = [
-                {'uid': user['userId'], 'nickname': user['nickname']} 
-                for user in new_user_infos
-            ]
-            upsert_users(engine, new_participants_to_upsert)
-            
-        all_parsed_data = [] # List[Dict[str, List[Dict]]]
-
-        for match_id, raw_data in raw_match_data_list:
-            try:
-                valid_user_games = []
-                for user_game in raw_data['userGames']:
-                    nickname = user_game['nickname']
-                    if nickname in nickname_to_uid_map:
-                        user_game['uid'] = nickname_to_uid_map[nickname]
-                        valid_user_games.append(user_game)
-                raw_data['userGames'] = valid_user_games
-                
-                if raw_data['userGames']:
-                    parsed_data = parse_match_data(raw_data)
-                    all_parsed_data.append(parsed_data)
-            except Exception as e:
-                logger.error(f"[Producer] Failed to parse match {match_id}: {e}")
-
-        # 6. UID -> user_num 매핑 (현재 배치의 모든 유저 대상)
-        batch_uids = set()
-        for _, raw_data in raw_match_data_list:
-            if 'userGames' in raw_data:
-                for user_game in raw_data['userGames']:
-                    if 'uid' in user_game:
-                        batch_uids.add(user_game['uid'])
-        
-        uid_to_user_num = get_user_num_map_by_uids(engine, list(batch_uids))
-
-        # 7. 데이터 병합 및 user_num 매핑
-        if all_parsed_data:
-            combined_data = {}
-            for parsed_data_map in all_parsed_data:
-                for table_name, data_list in parsed_data_map.items():
-                    if table_name not in combined_data:
-                        combined_data[table_name] = []
-                    
-                    # uid -> user_num 매핑 및 필터링
-                    if data_list and 'uid' in data_list[0]:
-                        valid_rows = []
-                        for row in data_list:
-                            uid = row.get('uid')
-                            if uid in uid_to_user_num:
-                                row['user_num'] = uid_to_user_num[uid]
-                                # uid 필드 제거 (DB 스키마에 맞춤)
-                                row.pop('uid', None)
-                                valid_rows.append(row)
-                            else:
-                                # 매핑 실패한 행은 스킵
-                                pass
-                        
-                        if valid_rows:
-                            combined_data[table_name].extend(valid_rows)
-                        elif data_list:
-                            missing_count = len(data_list)
-                            logger.warning(f"Missing user_num mapping for {missing_count} rows in table {table_name}. Dropping them.")
-                    else:
-                        combined_data[table_name].extend(data_list)
-            
-            # 큐(Queue)에 적재
+        # 4. 큐 적재
+        if combined_data:
             await queue.put(combined_data)
             logger.info(f"[Producer] Batch {i // BATCH_SIZE + 1} pushed to queue. Time: {time() - batch_start_time:.2f}s")
         
         # 메모리 정리
-        del raw_match_data_list, all_parsed_data, new_user_infos
-        # gc.collect() # 잦은 GC 호출은 성능 저하를 유발할 수 있으므로 필요한 경우에만 사용
+        del raw_match_data_list, combined_data
 
     # 생산(Producer) 종료
     logger.info("[Producer] All batches processed.")
 
-async def consume_batches(engine, queue: asyncio.Queue):
+async def consume_batches(engine, queue: asyncio.Queue) -> None:
     """
     Consumer: Queue에서 데이터를 꺼내 DB에 저장
+    1. 큐(Queue)에서 배치를 꺼냄
+    2. 각 배치에 대해:
+            - DB에 저장
+    3. 예외 처리 및 종료    
     """
     while True:
         try:
@@ -224,12 +263,14 @@ async def consume_batches(engine, queue: asyncio.Queue):
             logger.error(f"[Consumer] Error saving batch: {e}")
             queue.task_done() # 에러 발생 시에도 task_done 호출하여 데드락 방지
 
-async def run_pipeline():
+async def run_pipeline() -> None:
     """
     데이터 수집 파이프라인
     1. 활성 유저 유무 확인
     2. 유저가 없으면(초기 상태) 자동으로 시드 데이터(Top Rankers) 수집
     3. 유저가 있으면 기존 크롤링(스노우볼링) 로직 수행(Queue 기반 비동기 처리)
+    4. 각 유저의 last_match_id 갱신
+    5. 전체 처리 시간 로깅
     """
     pipeline_start_time = time()
     logger.info("--- Start Pipeline (Async Queue) ---")
