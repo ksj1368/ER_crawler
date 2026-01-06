@@ -410,11 +410,11 @@ class MatchUserCreditExpenditures(Base):
     __tablename__ = 'match_user_credit_expenditures'
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
     user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
-    expenditure_source_id = Column(Integer, ForeignKey('credit_expenditure_source.source_id'), primary_key=True)
-    order_seq = Column(Integer, primary_key=True, comment='Purchase order in a single match for a user')
+    event_seq = Column(Integer, primary_key=True, comment='Global purchase sequence for user')
+    expenditure_source_id = Column(Integer, ForeignKey('credit_expenditure_source.source_id'))
     expenditure_type = Column(String(32))
+    item_code = Column(Integer, nullable=True, comment='Raw item code if applicable')
     credit_amount = Column(Integer)
-    usage_count = Column(Integer)
 
     source_info = relationship("CreditExpenditureSource")
 
