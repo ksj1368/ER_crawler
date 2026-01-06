@@ -124,7 +124,13 @@ async def produce_batches(
             nickname_to_uid_map[user['nickname']] = user['userId']
 
         # 4. 파싱 및 DB 적재 준비
-        all_new_users = []
+        if new_user_infos:
+            new_participants_to_upsert = [
+                {'uid': user['userId'], 'nickname': user['nickname']} 
+                for user in new_user_infos
+            ]
+            upsert_users(engine, new_participants_to_upsert)
+            
         all_parsed_data = [] # List[Dict[str, List[Dict]]]
 
         for match_id, raw_data in raw_match_data_list:
@@ -137,22 +143,11 @@ async def produce_batches(
                         valid_user_games.append(user_game)
                 raw_data['userGames'] = valid_user_games
                 
-                # 신규 유저 정보 수집 (DB 적재 전용)
-                for user_info in new_user_infos:
-                    if any(u['nickname'] == user_info['nickname'] for u in raw_data['userGames']):
-                        all_new_users.append({'uid': user_info['userId'], 'nickname': user_info['nickname']})
-                
                 if raw_data['userGames']:
-                    # Single-Pass 파싱 최적화 적용됨
                     parsed_data = parse_match_data(raw_data)
                     all_parsed_data.append(parsed_data)
             except Exception as e:
                 logger.error(f"[Producer] Failed to parse match {match_id}: {e}")
-
-        # 5. 신규 유저 정보 저장 (DB 적재 전 필수 수행)
-        if all_new_users:
-            unique_users = list({p['uid']: p for p in all_new_users}.values())
-            upsert_users(engine, unique_users)
 
         # 6. UID -> user_num 매핑 (현재 배치의 모든 유저 대상)
         batch_uids = set()
