@@ -273,8 +273,8 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
                 })
 
             # Credit Expenditures parsing
-            item_counter = Counter()
-            kiosk_prices = copy.deepcopy(console_item_mapping)
+            event_seq = 0
+            kiosk_prices = console_item_mapping.copy()
             user_traits = u.get("traitFirstSub", []) + u.get("traitSecondSub", [])
             if discount_trait_code in user_traits:
                 for item_code in discount_target_items:
@@ -288,21 +288,22 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
             robot_purchase_log = []
 
             for item_code in console_items_log:
+                paid_with_special_material = False
                 if item_code in item_code_to_cr_key:
                     cr_key = item_code_to_cr_key[item_code]
                     name, exp_type, price = kiosk_prices[item_code]
                     if special_material_spent[cr_key] >= price > 0:
                         special_material_spent[cr_key] -= price
-                        item_counter[name] += 1
+                        event_seq += 1
                         expenditure_list.append({
                             "match_id": match_id, "uid": uid,
                             "expenditure_item": name, "expenditure_type": exp_type,
-                            "credit_amount": int(price), "usage_count": 1,
-                            "order_seq": item_counter[name]
+                            "credit_amount": int(price),
+                            "event_seq": event_seq,
+                            "item_code": item_code
                         })
-                    else:
-                        robot_purchase_log.append(item_code)
-                else:
+                        paid_with_special_material = True
+                if not paid_with_special_material:
                     robot_purchase_log.append(item_code)
 
             remaining_items = [item for item in robot_purchase_log if item != 999999]
