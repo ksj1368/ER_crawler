@@ -222,29 +222,16 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
         logger.error(f"Failed to save table '{table_name}': {e}")
         raise
 
-def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]):
-    """
-    파싱된 데이터(딕셔너리 리스트) 딕셔너리를 DB의 각 테이블에 저장
-    순서 보장: match_info (Parent) -> Others (Children)
-    병렬 처리: ThreadPoolExecutor 사용
-    1. 크레딧 획득/소모 소스 매핑
-    2. match_info 저장 (부모 테이블이므로 가장 먼저 저장)
-    3. 나머지 테이블 병렬 저장
-    4. 예외 처리 및 로깅
-    5. 환경 변수 DB_MAX_WORKERS로 워커 수 제어 (기본값 2)
-    6. DB_CHUNK_SIZE로 배치 삽입 크기
-    :param engine: SQLAlchemy 엔진
-    :param parsed_data: {'table_name': [row_dict, ...], ...}
-    7. 예외 발생 시 전체 저장 중단
-    8. 각 단계별 로깅
-    9. 불필요한 DB 접근 최소화
-    10. 스레드 안전한 캐시 사용
-    11. Raw SQL 삽입 지원
-    12. 삽입 전 데이터 유효성 검사
-    13. 삽입 후 결과 요약 로깅
-    14. 삽입 실패 시 재시도 메커니즘 고려
-    15. 대량 데이터 삽입 시 메모리 사용 최적화
-    16. 삽입 전후 타임스탬프 로깅
+def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]) -> None:
+    """파싱된 데이터를 DB에 저장
+    Args:
+        engine (Engine): SQLAlchemy 엔진
+        parsed_data (Dict[str, List[Dict[str, Any]]]): 파싱된 데이터
+    1. 크레딧 획득 소스 매핑
+    2. 크레딧 소모 소스 매핑
+    3. match_info 저장 (부모 테이블)
+    4. 나머지 테이블 병렬 저장
+    5. 예외 처리
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
