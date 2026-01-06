@@ -86,14 +86,14 @@ async def produce_batches(
         
         # 1. API 데이터 수집 (새로운 매치 데이터)
         raw_match_data_list = []
-        batch_participant_nicknames = set()
+        batch_user_nicknames = set()
         
         match_data_generator = client.get_match_infos_async(batch_match_ids)
         async for match_id, raw_data in match_data_generator:
             if raw_data and 'userGames' in raw_data:
                 raw_match_data_list.append((match_id, raw_data))
                 for user in raw_data['userGames']:
-                    batch_participant_nicknames.add(user['nickname'])
+                    batch_user_nicknames.add(user['nickname'])
         
         # 2. 원본 데이터(Raw Data) 저장 (데이터 레이크 용도)
         if raw_match_data_list:
@@ -110,7 +110,7 @@ async def produce_batches(
             storage.save(data_to_save, filename)
 
         # 3. 유저 식별 (DB에 없는 닉네임 조회)
-        all_nicknames_list = list(batch_participant_nicknames)
+        all_nicknames_list = list(batch_user_nicknames)
         existing_users_map = get_uids_by_nicknames(engine, all_nicknames_list)
         unknown_nicknames = [nick for nick in all_nicknames_list if nick not in existing_users_map]
         
@@ -124,7 +124,7 @@ async def produce_batches(
             nickname_to_uid_map[user['nickname']] = user['userId']
 
         # 4. 파싱 및 DB 적재 준비
-        all_new_participants = []
+        all_new_users = []
         all_parsed_data = [] # List[Dict[str, List[Dict]]]
 
         for match_id, raw_data in raw_match_data_list:
@@ -140,7 +140,7 @@ async def produce_batches(
                 # 신규 유저 정보 수집 (DB 적재 전용)
                 for user_info in new_user_infos:
                     if any(u['nickname'] == user_info['nickname'] for u in raw_data['userGames']):
-                        all_new_participants.append({'uid': user_info['userId'], 'nickname': user_info['nickname']})
+                        all_new_users.append({'uid': user_info['userId'], 'nickname': user_info['nickname']})
                 
                 if raw_data['userGames']:
                     # Single-Pass 파싱 최적화 적용됨
@@ -150,9 +150,9 @@ async def produce_batches(
                 logger.error(f"[Producer] Failed to parse match {match_id}: {e}")
 
         # 5. 신규 유저 정보 저장 (DB 적재 전 필수 수행)
-        if all_new_participants:
-            unique_participants = list({p['uid']: p for p in all_new_participants}.values())
-            upsert_users(engine, unique_participants)
+        if all_new_users:
+            unique_users = list({p['uid']: p for p in all_new_users}.values())
+            upsert_users(engine, unique_users)
 
         # 6. UID -> user_num 매핑 (현재 배치의 모든 유저 대상)
         batch_uids = set()
