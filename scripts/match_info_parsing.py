@@ -312,48 +312,55 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
                 if item_code in console_item_mapping:
                     name, _, original_price = console_item_mapping[item_code]
                     price = robot_fixed_prices.get(item_code, original_price)
-                    item_counter[name] += 1
+                   
+                    event_seq += 1
                     expenditure_list.append({
                         "match_id": match_id, "uid": uid,
                         "expenditure_item": name, "expenditure_type": "robot_item",
-                        "credit_amount": int(count * price), "usage_count": count,
-                        "order_seq": item_counter[name]
+                        "credit_amount": int(count * price),
+                        "event_seq": event_seq,
+                        "item_code": item_code
                     })
             
             credit_source = u.get("creditSource", {})
-            for source_key, (exp_type, default_count) in credit_source_mapping.items():
+            for source_key, (exp_type, _) in credit_source_mapping.items():
                 amount = credit_source.get(source_key, 0)
                 if amount > 0:
-                    item_counter[source_key] += 1
+                    event_seq += 1
                     expenditure_list.append({
                         "match_id": match_id, "uid": uid,
                         "expenditure_item": source_key, "expenditure_type": exp_type,
                         "credit_amount": int(amount), 
-                        "usage_count": u.get("creditRevivalCount", 1) if source_key == "KioskResurrection" else default_count,
-                        "order_seq": item_counter[source_key]
+                        "event_seq": event_seq,
+                        "item_code": None
                     })
             
             item_transferred_drone = u.get("itemTransferredDrone", [])
             if item_transferred_drone:
                 drone_item_counts = Counter(item_transferred_drone)
+                # 매핑에 있는 아이템 처리
                 for item_code, (name, exp_type, cost) in drone_item_mapping.items():
                     count = drone_item_counts.pop(item_code, 0)
                     if count > 0:
-                        item_counter[name] += 1
+                        event_seq += 1
                         expenditure_list.append({
                             "match_id": match_id, "uid": uid,
                             "expenditure_item": name, "expenditure_type": exp_type,
-                            "credit_amount": int(count * cost), "usage_count": count,
-                            "order_seq": item_counter[name]
+                            "credit_amount": int(count * cost),
+                            "event_seq": event_seq,
+                            "item_code": item_code
                         })
-                other_items_count = sum(drone_item_counts.values())
-                if other_items_count > 0:
-                    item_counter["etc"] += 1
+                
+                # 매핑에 없는 나머지 아이템 처리
+                for item_code, count in drone_item_counts.items():
+                    event_seq += 1
                     expenditure_list.append({
                         "match_id": match_id, "uid": uid,
-                        "expenditure_item": "etc", "expenditure_type": "remotedrone_item",
-                        "credit_amount": int(other_items_count * other_item_cr), "usage_count": other_items_count,
-                        "order_seq": item_counter["etc"]
+                        "expenditure_item": "etc",
+                        "expenditure_type": "remotedrone_item",
+                        "credit_amount": int(count * other_item_cr),
+                        "event_seq": event_seq,
+                        "item_code": item_code
                     })
 
             # Objects parsing
