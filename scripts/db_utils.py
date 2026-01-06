@@ -296,9 +296,6 @@ def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]
             logger.error(f"Failed to save match_info (Parent). Aborting batch save. Error: {e}")
             raise e
         
-        # 이미 저장했으므로 병렬 처리 대상에서 제외
-        if 'match_info' in parsed_data:
-             del parsed_data['match_info']
         all_tables.remove('match_info')
 
     # 2. 나머지 테이블 병렬 저장
