@@ -4,10 +4,9 @@ import argparse
 from scripts.config import SEASON_ID, MAIN_VERSION
 from scripts.crawler import ERAPIClient
 from scripts.hash_info_parsing import parse_all_meta_files, weapon_type, tactical_type
-from scripts.db_utils import get_engine, save_dataframes_to_db
+from scripts.db_utils import get_engine, save_data_to_db
 from scripts.logger import logger
 from scripts.pipeline import run_pipeline, seed_top_rankers
-import pandas as pd
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy import text
 
@@ -47,16 +46,13 @@ async def populate_static_tables(client: ERAPIClient):
     logger.info("Parsing all meta files...")
     try:
         # config.py의 버전을 사용 minor_version은 0으로 고정
-        meta_dataframes = await parse_all_meta_files(client, l10n_data, season=SEASON_ID, major_version=MAIN_VERSION, minor_version=0)
+        meta_data = await parse_all_meta_files(client, l10n_data, season=SEASON_ID, major_version=MAIN_VERSION, minor_version=0)
         
-        # weapon_type과 tactical_type을 데이터프레임에 추가
-        weapon_df = pd.DataFrame(list(weapon_type().items()), columns=['weapon_id', 'weapon_name'])
-        meta_dataframes['weapon_types'] = weapon_df
+        # weapon_type과 tactical_type을 리스트 딕셔너리로 변환하여 추가
+        meta_data['weapon_types'] = [{'weapon_id': k, 'weapon_name': v} for k, v in weapon_type().items()]
+        meta_data['tactical_skills'] = [{'tactical_skill_id': k, 'tactical_skill_name': v} for k, v in tactical_type().items()]
 
-        tactical_df = pd.DataFrame(list(tactical_type().items()), columns=['tactical_skill_id', 'tactical_skill_name'])
-        meta_dataframes['tactical_skills'] = tactical_df
-
-        logger.info(f"Parsed {len(meta_dataframes)} meta tables.")
+        logger.info(f"Parsed {len(meta_data)} meta tables.")
     except Exception as e:
         logger.error(f"Failed to parse meta files: {e}", exc_info=True)
         return
@@ -64,7 +60,7 @@ async def populate_static_tables(client: ERAPIClient):
     # DB에 수집 데이터 저장하기
     logger.info("Saving meta data to database...")
     try:
-        save_dataframes_to_db(engine, meta_dataframes)
+        save_data_to_db(engine, meta_data)
         logger.info("Successfully saved all meta data to the database.")
     except Exception as e:
         logger.error(f"Failed to save meta data to DB: {e}", exc_info=True)

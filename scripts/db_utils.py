@@ -3,19 +3,21 @@ import threading
 from sqlalchemy import create_engine, text, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
-import pandas as pd
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from scripts.config import DATABASE_URL
+from scripts.config import DATABASE_URL, DB_CHUNK_SIZE
 from scripts.models import User, Base, MatchInfo, CreditAcquisitionSource, CreditExpenditureSource
 
 logger = logging.getLogger(__name__)
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+# Connection Pool Tuning
+# pool_size: 유지할 커넥션 수 (기본 5)
+# max_overflow: pool_size를 초과하여 허용할 최대 커넥션 수
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600, pool_size=20, max_overflow=20)
 
-# Global Caches for Source IDs (key: source_name, value: source_id)
+# 전역 변수 설정
 _ACQUISITION_SOURCE_ID_CACHE: Dict[str, int] = {}
 _EXPENDITURE_SOURCE_ID_CACHE: Dict[str, int] = {}
 _CACHE_LOCK = threading.Lock()
@@ -172,82 +174,100 @@ def _get_or_create_expenditure_sources(engine: Engine, items: List[str]) -> Dict
         "credit_expenditure_source"
     )
 
-def _save_single_dataframe(engine: Engine, table_name: str, df: pd.DataFrame):
-    """단일 데이터프레임을 DB에 저장하는 함수"""
-    if df.empty:
+def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str, Any]]):
+    """단일 리스트를 DB에 저장하는 함수"""
+    if not data_list:
         return
     
+    total_rows = len(data_list)
+    
     try:
-        # DB NULL 처리를 위해 NaN을 None으로 변환 
-        df_obj = df.astype(object).where(pd.notnull(df), None)
-        
-        data_to_insert = df_obj.to_dict(orient='records')
-        if not data_to_insert:
-            return
-
         # Transaction 시작
         with engine.begin() as conn:
-            # 1. 외래키 체크 해제(대량 삽입 속도 향상 및 순서 문제 회피)
-            conn.execute(text("SET FOREIGN_KEY_CHECKS=0;"))
-            logger.info(f"Inserting {len(data_to_insert)} rows into '{table_name}'")
+            # 데이터 무결설 보장을 위해 FOREIGN_KEY_CHECKS=0 제거
+            logger.info(f"Inserting {total_rows} rows into '{table_name}' (Chunk size: {DB_CHUNK_SIZE})")
 
-            try:
-                # 2. 데이터 삽입 로직
-                if table_name in Base.metadata.tables:
+            is_raw_sql = table_name not in Base.metadata.tables
+            raw_stmt = None
+            
+            if is_raw_sql:
+                # 키를 추출하기 전에 추출 대상 데이터가 실제로 존재하는지 확인
+                if total_rows > 0: 
+                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
+                    keys = data_list[0].keys()
+                    # SQL 예약어와 충돌하지 않도록 컬럼 이름을 '`'로 감싸기
+                    columns = ', '.join([f"`{key}`" for key in keys])
+                    placeholders = ', '.join([f":{key}" for key in keys])
+                    # INSERT IGNORE 적용 (Raw SQL)
+                    raw_stmt = text(f"INSERT IGNORE INTO `{table_name}` ({columns}) VALUES ({placeholders})")
+
+            # 2. 데이터 삽입 로직
+            for start_idx in range(0, total_rows, DB_CHUNK_SIZE):
+                end_idx = start_idx + DB_CHUNK_SIZE
+                chunk = data_list[start_idx:end_idx]
+                
+                if not chunk:
+                    continue
+
+                if not is_raw_sql:
                     table = Base.metadata.tables[table_name]
-                    stmt = insert(table).values(data_to_insert)
+                    # INSERT IGNORE 적용 (SQLAlchemy Core)
+                    stmt = insert(table).prefix_with("IGNORE").values(chunk)
                     conn.execute(stmt)
                 else:
-                    logger.warning(f"Table '{table_name}' not found in metadata. Using raw SQL.")
-                    keys = data_to_insert[0].keys()
-                    columns = ', '.join(keys)
-                    placeholders = ', '.join([f":{key}" for key in keys])
-                    
-                    stmt = text(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})")
-                    conn.execute(stmt, data_to_insert)
-            
-            finally:
-                # 작업 성공/실패 여부와 관계없이 외래키 체크 반드시 복구
-                conn.execute(text("SET FOREIGN_KEY_CHECKS=1;"))
+                    if raw_stmt:
+                            conn.execute(raw_stmt, chunk)
             
     except Exception as e:
         logger.error(f"Failed to save table '{table_name}': {e}")
         raise
 
-def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
-    """
-    파싱된 데이터프레임 딕셔너리를 DB의 각 테이블에 저장
+def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]) -> None:
+    """파싱된 데이터를 DB에 저장
+    Args:
+        engine (Engine): SQLAlchemy 엔진
+        parsed_data (Dict[str, List[Dict[str, Any]]]): 파싱된 데이터
+    1. 크레딧 획득 소스 매핑
+    2. 크레딧 소모 소스 매핑
+    3. match_info 저장 (부모 테이블)
+    4. 나머지 테이블 병렬 저장
+    5. 예외 처리
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
-        df = parsed_data['match_user_credit_acquisitions']
-        if not df.empty and 'acquisition_source' in df.columns:
-            unique_sources = df['acquisition_source'].unique().tolist()
+        data_list = parsed_data['match_user_credit_acquisitions']
+        if data_list:
+            unique_sources = list({item['acquisition_source'] for item in data_list if 'acquisition_source' in item})
             source_map = _get_or_create_acquisition_sources(engine, unique_sources)
             
-            # ID로 매핑
-            df['acquisition_source_id'] = df['acquisition_source'].map(source_map)
+            valid_list = []
+            for item in data_list:
+                src = item.pop('acquisition_source', None)
+                if src and src in source_map:
+                    item['acquisition_source_id'] = source_map[src]
+                    valid_list.append(item)
             
-            # 원본 컬럼 및 알 수 없는 소스 제거
-            df.drop(columns=['acquisition_source'], inplace=True)
-            df.dropna(subset=['acquisition_source_id'], inplace=True)
+            parsed_data['match_user_credit_acquisitions'] = valid_list
 
     # 크레딧 소모 소스 매핑
     if 'match_user_credit_expenditures' in parsed_data:
-        df = parsed_data['match_user_credit_expenditures']
-        if not df.empty and 'expenditure_item' in df.columns:
-            unique_items = df['expenditure_item'].unique().tolist()
-            # None 값 제거(문자열만 처리)
-            unique_items = [str(x) for x in unique_items if x is not None and str(x).strip()]
-            
+        data_list = parsed_data['match_user_credit_expenditures']
+        if data_list:
+            unique_items = list({
+                str(item['expenditure_item']) 
+                for item in data_list 
+                if item.get('expenditure_item') is not None and str(item['expenditure_item']).strip()
+            })
             source_map = _get_or_create_expenditure_sources(engine, unique_items)
             
-            # ID로 매핑
-            df['expenditure_source_id'] = df['expenditure_item'].astype(str).map(source_map)
+            valid_list = []
+            for item in data_list:
+                item_val = item.pop('expenditure_item', None)
+                if item_val is not None and str(item_val) in source_map:
+                    item['expenditure_source_id'] = source_map[str(item_val)]
+                    valid_list.append(item)
             
-            # 원본 컬럼 및 알 수 없는 소스 제거
-            df.drop(columns=['expenditure_item'], inplace=True)
-            df.dropna(subset=['expenditure_source_id'], inplace=True)
+            parsed_data['match_user_credit_expenditures'] = valid_list
             
     # 저장할 모든 테이블 목록
     all_tables = list(parsed_data.keys())
@@ -255,12 +275,23 @@ def save_dataframes_to_db(engine: Engine, parsed_data: dict[str, pd.DataFrame]):
     if not all_tables:
         return
 
+    # 1. Match Info 저장 (Parent Table - Must save first)
+    if 'match_info' in parsed_data:
+        try:
+            _save_single_list(engine, 'match_info', parsed_data['match_info'])
+        except Exception as e:
+            logger.error(f"Failed to save match_info (Parent). Aborting batch save. Error: {e}")
+            raise e
+        
+        all_tables.remove('match_info')
+
+    # 2. 나머지 테이블 병렬 저장
     # 워커 수를 환경 변수로 제어 (기본값: 2로 상향 조정하여 병렬 처리 활성화)
     max_workers = int(os.getenv("DB_MAX_WORKERS", 2))
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_save_single_dataframe, engine, table_name, parsed_data[table_name]): table_name
+            executor.submit(_save_single_list, engine, table_name, parsed_data[table_name]): table_name
             for table_name in all_tables
         }
         

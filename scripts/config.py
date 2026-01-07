@@ -39,10 +39,16 @@ GAME_METADATA_PATH = MAPPING_ROOT / "game_metadata.json"
 # DB Settings
 DB_PORT = int(os.getenv("DB_PORT", 3306))
 DB_NAME = os.getenv("DB_NAME", "erdb")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+
 if ENV == "prod":
     DB_HOST = os.getenv("DB_HOST")
     DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    
+    # Production 환경 필수 변수 검증
+    if not all([DB_HOST, DB_USER, DB_PASSWORD]):
+        missing = [k for k, v in {"DB_HOST": DB_HOST, "DB_USER": DB_USER, "DB_PASSWORD": DB_PASSWORD}.items() if not v]
+        raise EnvironmentError(f"Production database credentials ({', '.join(missing)}) must be set in environment variables.")
 else:
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_USER = os.getenv("DB_USER", "root")
@@ -52,9 +58,16 @@ else:
 if DB_USER and DB_PASSWORD and DB_HOST:
     DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 else:
+    # URL이 생성되지 않을 경우
     DATABASE_URL = None
     if ENV == "prod":
-        raise ValueError("CRITICAL ERROR: Database credentials missing in production environment!")
+        raise EnvironmentError("Failed to generate DATABASE_URL. Check DB settings.")
+
+# Tuning Configuration
+DB_CHUNK_SIZE = int(os.getenv("DB_CHUNK_SIZE", 5000))
+BATCH_SIZE = int(os.getenv("BATCH_SIZE", 20))
+
+# API Configuration
 
 # Logging
 LOG_PATH.mkdir(parents=True, exist_ok=True)

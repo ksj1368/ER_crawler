@@ -2,7 +2,6 @@
 {
     "credit_source_mapping": {
         "KioskResurrection": ["revival", 1],
-        "KioskRemoteDroneMySelf": ["remotedrone", 1],
         "GuideRobotSignature": ["robot", 1],
         "GuideRobotRadial": ["robot", 1],
         "guideRobotFlagShip": ["robot", 1]
