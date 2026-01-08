@@ -433,3 +433,10 @@ class MatchUserObject(Base):
     metric_type = Column(String(32), primary_key=True)
     metric_name = Column(String(32), primary_key=True)
     value = Column(Integer)
+
+class MatchUserGadget(Base):
+    __tablename__ = 'match_user_gadget'
+    match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
+    user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
+    gadget_id = Column(Integer, primary_key=True)
+    gadget_count = Column(Integer)
