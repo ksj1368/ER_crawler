@@ -439,4 +439,4 @@ class MatchUserGadget(Base):
     match_id = Column(Integer, ForeignKey('match_user_start.match_id'), primary_key=True)
     user_num = Column(Integer, ForeignKey('match_user_start.user_num'), primary_key=True)
     gadget_id = Column(Integer, primary_key=True)
-    gadget_count = Column(Integer)
+    gadget_count = Column(Integer, nullable=False)

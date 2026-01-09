@@ -23,7 +23,7 @@ def upgrade() -> None:
     sa.Column('match_id', sa.Integer(), nullable=False),
     sa.Column('user_num', sa.Integer(), nullable=False),
     sa.Column('gadget_id', sa.Integer(), nullable=False),
-    sa.Column('gadget_count', sa.Integer(), nullable=True),
+    sa.Column('gadget_count', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['match_id'], ['match_user_start.match_id'], ),
     sa.ForeignKeyConstraint(['user_num'], ['match_user_start.user_num'], ),
     sa.PrimaryKeyConstraint('match_id', 'user_num', 'gadget_id')
