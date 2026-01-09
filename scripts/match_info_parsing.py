@@ -519,6 +519,39 @@ def _parse_user_sight_from_game(u: dict) -> Dict:
         "basic_drone_setup": u["useReconDrone"]
     }
 
+def _parse_user_gadget_from_game(u: dict) -> List[Dict]:
+    """ 유저 가젯 사용 정보 파싱 """
+    gadget_list = []
+    match_id = u["gameId"]
+    uid = u["uid"]
+    
+    for gadget_id, count in u.get("useGadget", {}).items():
+        if count > 0:
+            gadget_list.append({
+                "match_id": match_id,
+                "uid": uid,
+                "gadget_id": int(gadget_id),
+                "gadget_count": count
+            })
+    return gadget_list
+
+def _parse_user_bori_from_game(u: dict) -> List[Dict]:
+    """ 유저 보리 보상 정보 파싱(MatchUserObject 테이블에 저장) """
+    bori_list = []
+    match_id = u["gameId"]
+    uid = u["uid"]
+    
+    for grade, count in u.get("getBoriReward", {}).items():
+        if count > 0:
+            bori_list.append({
+                "match_id": match_id,
+                "uid": uid,
+                "metric_type": "bori",
+                "metric_name": int(grade),
+                "value": count
+            })
+    return bori_list
+
 def _parse_user_equipment_from_game(u: dict) -> Dict:
     """ 유저 장비 정보 파싱
     Args:
@@ -595,6 +628,7 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
         user_sight_list = []
         user_equipment_list = []
         user_mmr_list = []
+        user_gadget_list = []
         
         processed_team_ids = set()
         
@@ -621,12 +655,17 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
             user_damage_list.append(_parse_user_damage_from_game(u))
             acquisition_list.extend(_parse_credit_acquisitions_from_game(u, source_mapping, skip_cr_sources))
             expenditure_list.extend(_parse_credit_expenditures_from_game(u, MAPPINGS, drone_item_mapping, other_item_cr))
+            
+            # Object parsing + Bori parsing
             object_list.extend(_parse_user_objects_from_game(u, obj_mappings))
+            object_list.extend(_parse_user_bori_from_game(u))
+            
             user_credit_time_list.extend(_parse_user_credit_time_from_game(u))
             user_stats_list.append(_parse_user_stats_from_game(u))
             user_sight_list.append(_parse_user_sight_from_game(u))
             user_equipment_list.append(_parse_user_equipment_from_game(u))
             user_mmr_list.append(_parse_user_mmr_from_game(u))
+            user_gadget_list.extend(_parse_user_gadget_from_game(u))
 
         return {
             "match_info": match_info_list,
@@ -643,7 +682,8 @@ def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
             "match_user_stats": user_stats_list,
             "match_user_sight": user_sight_list,
             "match_user_equipment": user_equipment_list,
-            "match_user_mmr": user_mmr_list
+            "match_user_mmr": user_mmr_list,
+            "match_user_gadget": user_gadget_list
         }
 
     except Exception as e:

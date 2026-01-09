@@ -1,8 +1,6 @@
 
 {
     "direct_metrics": {
-        "damage_to_rumi": ["damageToGuideRobot", "damage"],
-        "damage_to_monster": ["damageToMonster", "damage"],
         "total_kill_monster": ["monsterKill", "kill_monster"],
         "get_cube_red": ["getBuffCubeRed", "get_cube"],
         "get_cube_green": ["getBuffCubeGreen", "get_cube"],
