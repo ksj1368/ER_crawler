@@ -1,11 +1,22 @@
 from sqlalchemy import (
-    Column, String, Integer, DateTime, Boolean, Float, ForeignKey, ForeignKeyConstraint
+    Column, String, Integer, DateTime, Boolean, Float, ForeignKey, ForeignKeyConstraint, MetaData
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
+# 제약 조건 convention
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+metadata = MetaData(naming_convention=convention)
+
 # Alembic이 이 메타데이터를 보고 DB 변경을 감지
-Base = declarative_base()
+Base = declarative_base(metadata=metadata)
 
 class User(Base):
     __tablename__ = 'user'
