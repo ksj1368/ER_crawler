@@ -36,6 +36,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: ${{ secrets.REMOTE_SSH_PORT }}
+          command_timeout: 30m
           script: |
             # 에러 발생 시 즉시 중단
             set -e
@@ -49,27 +50,22 @@ jobs:
             
             cd $PROJECT_DIR
             
-
-            # Docker가 만든 root 소유 파일을 현재 사용자로 변경
-            echo "Fixing permissions for $PROJECT_DIR..."
+            # 권한 정리
             sudo chown -R $(whoami):$(whoami) .
 
             # 2. 소스 코드 동기화 (현재 배포하려는 브랜치 기준)
             git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
             
-            # 배포를 할 브랜치로 체크아웃
             TARGET_BRANCH="${{ github.ref_name }}"
-            echo "Checking out branch: $TARGET_BRANCH"
-            
             git checkout $TARGET_BRANCH
+            # 서버를 항상 GitHub 최신 상태와 동일하게 맞춤 (로컬 변경사항 삭제)
             git reset --hard origin/$TARGET_BRANCH
             git pull origin $TARGET_BRANCH
 
             # 3. 환경 변수 파일 생성
             cat <<EOF > .env
             ENV=prod
-
             AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             AWS_REGION=${{ secrets.AWS_REGION }}
@@ -80,7 +76,6 @@ jobs:
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             API_KEY=${{ secrets.API_KEY }}
-            
             AIRFLOW_UID=50000
             season_id = 35
             matching_mode = 3
@@ -102,24 +97,35 @@ jobs:
                 fi
             }
 
+            # ----------------------------------------------------------------
+            # 4. DB 상태 검증 및 마이그레이션 (Validation & Migration)
+            # ----------------------------------------------------------------
+
             if [ "$TARGET_BRANCH" == "main" ]; then
-                echo "[PRODUCTION] Main Branch Detected: Starting Crawler..."
+                echo "[Check] Building migration tool..."
+                docker_compose_cmd build db-migrator
                 
-                # 기존 컨테이너 종료 (에러 무시)
-                docker_compose_cmd down || true
+                # (A) DB 상태 로그 출력 (디버깅용)
+                # 현재 어떤 head 상태인지 로그에 남깁니다.
+                echo "[Check] Current DB Heads:"
+                docker_compose_cmd run --rm db-migrator alembic heads
+
+                # (B) 마이그레이션 실행 (이것이 곧 검사입니다)
+                # Alembic은 'multiple heads'가 존재하면 upgrade 명령 시 자동으로 에러를 내고 종료합니다.
+                # 'set -e' 설정 때문에 여기서 에러가 나면 배포 스크립트 전체가 멈춥니다.
+                echo "[Migration] Applying DB upgrades..."
+                docker_compose_cmd run --rm --user root db-migrator alembic upgrade head
                 
-                # 실행 및 데이터 수집 시작 (Up)
+                # 위 단계가 성공해야만 아래 서비스 시작 로직이 실행됩니다.
+                
+                echo "[Deploy] Restarting services..."
+                docker_compose_cmd down --timeout 15 --remove-orphans || true
                 docker_compose_cmd up -d --build
-                
             else
-                echo "[TEST] Feature Branch Detected: Verifying Build Only..."
-                echo "No data will be collected. Containers will NOT start."
-                
-                # 실행하지 않고 빌드만 수행 (Build Only)
+                echo "[TEST] Feature branch detected. Building only..."
                 docker_compose_cmd build
             fi
             
-            # 이미지 정리
             sudo docker image prune -f
 
       - name: Remove GitHub Actions IP from Security Group
