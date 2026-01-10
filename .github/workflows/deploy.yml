@@ -149,7 +149,6 @@ jobs:
                 fi
             }
 
-            # 4. 실제 배포 (테스트 Job 통과했으므로 안전하게 진행)
             echo "[Deploy] Starting production deployment..."
             
             # DB 상태 체크 (디버깅용)
