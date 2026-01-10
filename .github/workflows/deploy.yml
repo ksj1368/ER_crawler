@@ -33,19 +33,34 @@ jobs:
 
       - name: Build and Run Migration Test
         run: |
+          # 1. DB 컨테이너 실행
           docker compose up -d erdb
           
-          # DB가 완전히 켜질 때까지 대기
-          sleep 20
+          # 2. [핵심] MySQL이 접속 가능할 때까지 대기 (Healthcheck Loop)
+          echo "Waiting for MySQL to be ready..."
+          RETRIES=0
+          until docker compose exec -T erdb mysql -u root -proot -e "SELECT 1;" > /dev/null 2>&1 || [ $RETRIES -eq 30 ]; do
+            echo "Waiting for MySQL server... $((RETRIES++))s"
+            sleep 1
+          done
           
-          # 테스트용 데이터베이스 강제 생성
-          # -T 옵션: CI 환경에서 TTY 오류 방지
-          # -proot: 비밀번호(root) 입력 (붙여서 써야 함)
+          if [ $RETRIES -eq 30 ]; then
+            echo "Error: MySQL failed to start within 30 seconds."
+            exit 1
+          fi
+          echo "MySQL is up and running!"
+
+          # 3. 테스트용 DB 강제 생성 및 확인
+          echo "Creating test database..."
           docker compose exec -T erdb mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS eternal_return_test;"
           
+          echo "Current Databases:"
+          docker compose exec -T erdb mysql -u root -proot -e "SHOW DATABASES;"
+
+          # 4. 마이그레이션 도구 빌드
           docker compose build db-migrator
           
-          # 쉘(/bin/bash)을 통해 실행하여 명령어 중복/꼬임 방지
+          # 5. 마이그레이션 실행 (이제 DB가 있으므로 성공해야 함)
           docker compose run --rm --entrypoint /bin/bash db-migrator -c "python -m alembic upgrade head"
           
       - name: Cleanup
