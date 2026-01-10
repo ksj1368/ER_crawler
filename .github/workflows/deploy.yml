@@ -34,7 +34,15 @@ jobs:
       - name: Build and Run Migration Test
         run: |
           docker compose up -d erdb
-          sleep 10
+          
+          # DB가 완전히 켜질 때까지 대기
+          sleep 20
+          
+          # 테스트용 데이터베이스 강제 생성
+          # -T 옵션: CI 환경에서 TTY 오류 방지
+          # -proot: 비밀번호(root) 입력 (붙여서 써야 함)
+          docker compose exec -T erdb mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS eternal_return_test;"
+          
           docker compose build db-migrator
           
           # 쉘(/bin/bash)을 통해 실행하여 명령어 중복/꼬임 방지
