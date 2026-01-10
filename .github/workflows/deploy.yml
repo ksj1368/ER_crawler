@@ -117,9 +117,13 @@ jobs:
             git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
             git fetch --all
             
-            git checkout main
-            git reset --hard origin/main
-            git pull origin main
+            # Dynamically switch to the branch that triggered this workflow
+            TARGET_BRANCH="${{ github.ref_name }}"
+            echo "Deploying branch: $TARGET_BRANCH"
+            
+            git checkout $TARGET_BRANCH
+            git reset --hard origin/$TARGET_BRANCH
+            git pull origin $TARGET_BRANCH
 
             cat <<EOF > .env
             ENV=prod
