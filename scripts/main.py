@@ -80,15 +80,34 @@ async def run_full_process():
     await run_pipeline()
 
 
+async def run_hash_process():
+    """
+    정적 데이터(해시) 수집 프로세스 실행
+    """
+    async with ERAPIClient() as client:
+        await populate_static_tables(client)
+
+
+async def run_match_process():
+    """
+    매치 데이터 수집 프로세스 실행
+    """
+    await run_pipeline()
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Eternal Return Data Crawler")
-    parser.add_argument("command", choices=["run", "seed"], default="run", nargs="?", help="Command to execute: 'run' for full pipeline, 'seed' for top rankers only.")
+    parser.add_argument("command", choices=["run", "seed", "hash", "match"], default="run", nargs="?", help="Command to execute: 'run' for full pipeline, 'seed' for top rankers only, 'hash' for static data, 'match' for match data.")
     args = parser.parse_args()
 
     if args.command == "seed":
         await seed_top_rankers()
     elif args.command == "run":
         await run_full_process()
+    elif args.command == "hash":
+        await run_hash_process()
+    elif args.command == "match":
+        await run_match_process()
 
 if __name__ == "__main__":
     asyncio.run(main())

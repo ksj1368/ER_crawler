@@ -233,6 +233,14 @@ class MatchUserStart(Base):
     premade_matching_type = Column(Integer)
     tactical_skill_id = Column(Integer)
     ml_bot = Column(Boolean)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['match_id', 'team_number'],
+            ['match_team_info.match_id', 'match_team_info.team_number'],
+        ),
+    )
+
     team = relationship("MatchTeamInfo", back_populates="users", 
                         foreign_keys=[match_id, team_number],
                         primaryjoin="and_(MatchUserStart.match_id==MatchTeamInfo.match_id, MatchUserStart.team_number==MatchTeamInfo.team_number)")

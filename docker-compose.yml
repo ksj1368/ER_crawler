@@ -49,24 +49,26 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: airflow     # Airflow용 기본 DB 생성
-      MYSQL_USER: ${DB_USER}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mysql-db-volume:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: always
     ports:
-      - "3306:3306"
+      - "3307:3306"
   
   # DB 테이블 생성 및 마이그레이션
   db-migrator:
     <<: *airflow-common
-    command: bash -c "alembic upgrade head"
+    entrypoint: /bin/bash
+    command: -c "alembic stamp head"
     restart: on-failure
+    depends_on:
+      erdb:
+        condition: service_healthy
 
   airflow-webserver:
     <<: *airflow-common
@@ -91,6 +93,9 @@ services:
         condition: service_completed_successfully
   airflow-init:
     <<: *airflow-common
+    depends_on:
+      erdb:
+        condition: service_healthy
     entrypoint: /bin/bash
     command:
       - -c
