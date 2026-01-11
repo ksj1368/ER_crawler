@@ -6,11 +6,11 @@ from time import time
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 
-from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV, BATCH_SIZE
+from scripts.config import SEASON_ID, MATCHING_MODE, REGION_ID, ENV, BATCH_SIZE, USER_BATCH_LIMIT
 from scripts.crawler import ERAPIClient
 from scripts.storage import get_storage
 from scripts.db_utils import (
-    get_engine, deactivate_user, get_active_users, upsert_users, 
+    get_engine, deactivate_user, get_active_users, get_active_users_count, upsert_users, 
     update_user_last_match_bulk, save_data_to_db, check_match_exists, 
     get_uids_by_nicknames, get_user_num_map_by_uids
 )
@@ -282,8 +282,12 @@ async def run_pipeline() -> None:
 
     # 1. 활성 유저 확인 / 시드 데이터 수집
     step_start_time = time()
-    active_users = get_active_users(engine)
-    logger.info(f"Initial Check: Found {len(active_users)} active users.")
+    
+    total_active_count = get_active_users_count(engine)
+    active_users = get_active_users(engine, limit=USER_BATCH_LIMIT)
+    
+    logger.info(f"Initial Check: Found {total_active_count} total active users.")
+    logger.info(f"Batch Processing: Processing {len(active_users)} users in this run (Limit: {USER_BATCH_LIMIT}).")
 
     # 2. 유저가 없으면 Auto-Seeding 수행
     if not active_users:
@@ -291,7 +295,7 @@ async def run_pipeline() -> None:
         await seed_top_rankers()
         
         # 재확인
-        active_users = get_active_users(engine)
+        active_users = get_active_users(engine, limit=USER_BATCH_LIMIT)
         if not active_users:
             logger.error("Auto-Seeding failed. No users found even after seeding. Exiting.")
             return

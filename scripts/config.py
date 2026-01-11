@@ -66,6 +66,7 @@ else:
 # Tuning Configuration
 DB_CHUNK_SIZE = int(os.getenv("DB_CHUNK_SIZE", 5000))
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", 20))
+USER_BATCH_LIMIT = int(os.getenv("USER_BATCH_LIMIT", 30000))  # 한 번에 처리할 최대 유저 수
 
 # API Configuration
 
