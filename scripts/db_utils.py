@@ -1,6 +1,6 @@
 import os
 import threading
-from sqlalchemy import create_engine, text, select, update
+from sqlalchemy import create_engine, text, select, update, func
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
 import logging
@@ -316,13 +316,30 @@ def execute_sql_file(engine: Engine, file_path: str):
                 conn.execute(text(stmt))
     logger.info(f"Successfully executed SQL script: {file_path}")
 
-def get_active_users(engine: Engine) -> List[Dict[str, Any]]:
-    """is_active가 True인 모든 유저의 uid, user_num, nickname, last_match_id를 조회"""
+def get_active_users_count(engine: Engine) -> int:
+    """is_active가 True인 전체 유저 수를 조회"""
     with engine.connect() as conn:
-        # user_num 추가 조회
-        stmt = select(User.uid, User.nickname, User.last_match_id, User.user_num).where(User.is_active == True)
+        stmt = select(func.count()).select_from(User).where(User.is_active == True)
         result = conn.execute(stmt)
-        return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2], 'user_num': row[3]} for row in result]
+        return result.scalar_one()
+
+def get_active_users(engine: Engine, limit: int = None) -> List[Dict[str, Any]]:
+    """
+    is_active가 True인 유저의 uid, user_num, nickname, last_match_id를 조회합니다.
+    last_updated_at 기준 오름차순으로 정렬하여 업데이트가 가장 오래된 유저를 우선적으로 가져옵니다.
+    
+    Args:
+        engine (Engine): SQLAlchemy 엔진
+        limit (int, optional): 조회할 유저 수 제한. None일 경우 모든 유저 조회.
+    """
+    with engine.connect() as conn:
+        stmt = select(User.uid, User.nickname, User.last_match_id, User.user_num).where(User.is_active == True).order_by(User.last_updated_at.asc())
+        
+        if limit:
+            stmt = stmt.limit(limit)
+            
+        result = conn.execute(stmt)
+        return result.mappings().all()
 
 def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     """

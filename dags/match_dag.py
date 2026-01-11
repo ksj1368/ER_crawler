@@ -26,8 +26,8 @@ def run_match_task():
 with DAG(
     'eternal_return_match_v1',
     default_args=default_args,
-    description='Eternal Return Match Data Collection Pipeline (Hourly)',
-    schedule_interval='0 * * * *', # 매 시간 정각 실행
+    description='Eternal Return Match Data Collection Pipeline',
+    schedule_interval='*/5 * * * *', # 5분마다 실행 시도 (max_active_runs=1에 의해 순차 실행됨)     
     start_date=datetime(2023, 1, 1),
     catchup=False,
     tags=['eternal_return', 'crawler', 'match'],
@@ -37,5 +37,5 @@ with DAG(
     t1_run_match_collection = PythonOperator(
         task_id='run_match_collection',
         python_callable=run_match_task,
-        execution_timeout=timedelta(hours=1), # 시간 단위 실행이므로 타임아웃 1시간
+        execution_timeout=timedelta(hours=24),
     )
