@@ -1,6 +1,6 @@
 import os
 import threading
-from sqlalchemy import create_engine, text, select, update
+from sqlalchemy import create_engine, text, select, update, func
 from sqlalchemy.engine import Engine
 from sqlalchemy.dialects.mysql import insert
 import logging
@@ -319,9 +319,9 @@ def execute_sql_file(engine: Engine, file_path: str):
 def get_active_users_count(engine: Engine) -> int:
     """is_active가 True인 전체 유저 수를 조회"""
     with engine.connect() as conn:
-        stmt = text("SELECT COUNT(*) FROM user WHERE is_active = 1")
+        stmt = select(func.count()).select_from(User).where(User.is_active == True)
         result = conn.execute(stmt)
-        return result.scalar()
+        return result.scalar_one()
 
 def get_active_users(engine: Engine, limit: int = None) -> List[Dict[str, Any]]:
     """
@@ -339,7 +339,7 @@ def get_active_users(engine: Engine, limit: int = None) -> List[Dict[str, Any]]:
             stmt = stmt.limit(limit)
             
         result = conn.execute(stmt)
-        return [{'uid': row[0], 'nickname': row[1], 'last_match_id': row[2], 'user_num': row[3]} for row in result]
+        return result.mappings().all()
 
 def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
     """
