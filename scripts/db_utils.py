@@ -27,7 +27,17 @@ def get_engine() -> Engine:
     return engine
 
 def check_match_exists(engine: Engine, match_ids: list[int]) -> set[int]:
-    """DB에 이미 존재하는 매치 ID들을 한번에 조회하여 set으로 반환"""
+    """DB에 이미 존재하는 매치 ID를 조회합니다.
+
+    중복 수집을 방지하기 위해 API에서 뻐을 매치 ID 목록과 DB를 비교합니다.
+
+    Args:
+        engine: SQLAlchemy Engine 인스턴스.
+        match_ids: 확인할 매치 ID 리스트.
+
+    Returns:
+        DB에 이미 존재하는 매치 ID의 집합(set).
+    """
     if not match_ids:
         return set()
     
@@ -223,15 +233,19 @@ def _save_single_list(engine: Engine, table_name: str, data_list: List[Dict[str,
         raise
 
 def save_data_to_db(engine: Engine, parsed_data: Dict[str, List[Dict[str, Any]]]) -> None:
-    """파싱된 데이터를 DB에 저장
+    """파싱된 데이터를 DB에 적재합니다.
+
+    Parent 테이블(match_info)을 먼저 저장한 후, 나머지 테이블은
+    ThreadPoolExecutor를 사용해 병렬로 저장하여 FK 제약 조건을 만족함과 동시에
+    성능을 최적화합니다.
+
     Args:
-        engine (Engine): SQLAlchemy 엔진
-        parsed_data (Dict[str, List[Dict[str, Any]]]): 파싱된 데이터
-    1. 크레딧 획득 소스 매핑
-    2. 크레딧 소모 소스 매핑
-    3. match_info 저장 (부모 테이블)
-    4. 나머지 테이블 병렬 저장
-    5. 예외 처리
+        engine: SQLAlchemy Engine 인스턴스.
+        parsed_data: 테이블명 -> 데이터 리스트 매핑.
+            예: {'match_info': [...], 'match_user_start': [...]}
+
+    Note:
+        크레딧 획득/소모 소스는 내부적으로 source_id로 매핑됩니다.
     """
     # 크레딧 획득 소스 매핑
     if 'match_user_credit_acquisitions' in parsed_data:
@@ -341,11 +355,15 @@ def get_active_users(engine: Engine, limit: int = None) -> List[Dict[str, Any]]:
         result = conn.execute(stmt)
         return result.mappings().all()
 
-def upsert_users(engine: Engine, users_data: List[Dict[str, str]]):
-    """
-    여러 유저 정보를 Upsert
-    - DB에 없는 uid는 새로 추가 (user_num 자동 생성)
-    - DB에 이미 있는 uid는 nickname과 last_updated_at을 갱신
+def upsert_users(engine: Engine, users_data: List[Dict[str, str]]) -> None:
+    """여러 유저 정보를 Upsert합니다.
+
+    새로운 유저는 user_num이 자동 생성되며,
+    기존 유저는 닉네임과 last_updated_at이 갱신됩니다.
+
+    Args:
+        engine: SQLAlchemy Engine 인스턴스.
+        users_data: 유저 정보 리스트. 각 dict에 'uid', 'nickname' 포함.
     """
     if not users_data:
         return
@@ -389,10 +407,15 @@ def update_user_last_match(engine: Engine, uid: str, last_match_id: int):
         conn.execute(stmt)
     logger.info(f"Updated last_match_id for user {uid} to {last_match_id}")
 
-def update_user_last_match_bulk(engine: Engine, user_updates: List[Dict[str, Any]]):
-    """
-    여러 유저의 마지막 매치 ID를 일괄 갱신(Batch Update)
-    :param user_updates: [{'uid': str, 'last_match_id': int}, ...]
+def update_user_last_match_bulk(engine: Engine, user_updates: List[Dict[str, Any]]) -> None:
+    """여러 유저의 마지막 매치 ID를 일괄 갱신합니다.
+
+    파이프라인 종료 시 처리된 각 유저의 최신 매치 ID를
+    한 번에 업데이트하여 DB 라운드트립을 최소화합니다.
+
+    Args:
+        engine: SQLAlchemy Engine 인스턴스.
+        user_updates: 업데이트 리스트. 각 dict에 'uid', 'last_match_id' 포함.
     """
     if not user_updates:
         return

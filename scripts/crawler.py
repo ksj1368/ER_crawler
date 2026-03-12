@@ -58,8 +58,24 @@ class ERAPIClient:
         initial_delay: float = 1.0,
         response_model: Optional[Type[T]] = None
     ) -> Any | T | None:
-        """
-        재시도 로직과 API 호출 제한량을 포함하여 JSON을 가져오는 내부 메서드.
+        """재시도 로직과 Rate Limiting을 포함하여 JSON을 가져오는 내부 메서드.
+
+        지수 백오프(Exponential Backoff)와 전역 Rate Limiter를 적용하여
+        API 호출 제한(429)과 네트워크 오류에 안전하게 대응합니다.
+
+        Args:
+            url: 요청할 API 엔드포인트 URL.
+            params: URL 쿼리 파라미터 딕셔너리.
+            max_retries: 최대 재시도 횟수 (기본값: 5).
+            initial_delay: 첫 재시도 대기 시간(초) (기본값: 1.0).
+            response_model: 응답 검증에 사용할 Pydantic 모델 클래스.
+
+        Returns:
+            성공 시 JSON 딕셔너리 또는 Pydantic 모델 인스턴스.
+            실패 시 None.
+
+        Raises:
+            RuntimeError: 세션이 초기화되지 않은 경우.
         """
         if not self.session: # 세션이 초기화되지 않은 경우
             raise RuntimeError("Client session is not initialized. Use 'async with ERAPIClient() as client:'.")
@@ -175,7 +191,16 @@ class ERAPIClient:
         return None
 
     async def get_top_ranker(self, season_id: int, matching_mode: int, server_code: int) -> dict | None:
-        """ 상위 랭커 정보 가져오기 """
+        """상위 랭커 목록(1,000명)을 조회합니다.
+
+        Args:
+            season_id: 시즌 ID (예: 35).
+            matching_mode: 매칭 모드 (2=일반, 3=랭크, 6=코발트).
+            server_code: 서버 코드 (10=asia, 20=na, 30=eu).
+
+        Returns:
+            랭커 정보가 담긴 딕셔너리. 실패 시 None.
+        """
         url = f"{BASE_URL}{URLS['rank']['top'].format(season_id=season_id, matching_mode=matching_mode, server_code=server_code)}"
         data = await self._fetch_json(url, response_model=TopRankerResponse)
         return data.model_dump() if data else None
@@ -207,9 +232,21 @@ class ERAPIClient:
         return 404, None 
 
     async def get_user_games_by_uid_async(self, users: List[Dict[str, Any]]) -> AsyncGenerator[Dict[str, Any], None]:
-        """ 사용자 id(uid)로 매치 기록 조회 """
+        """여러 유저의 신규 매치 ID를 비동기로 수집합니다.
+
+        각 유저의 last_match_id 이후의 랭크 매치만 수집하며,
+        페이지네이션을 통해 모든 신규 매치를 조회합니다.
+
+        Args:
+            users: 유저 정보 리스트. 각 딕셔너리에 'uid', 'last_match_id' 포함.
+
+        Yields:
+            유저별 결과 딕셔너리:
+                - {'uid': str, 'status': 'success', 'matches': List[int]}
+                - {'uid': str, 'status': 'deactivated'} (탈퇴 유저, 닉네임 변경 등)
+        """
         async def process_user(user) -> dict:
-            """ 단일 사용자 매치 기록 처리 """
+            """단일 사용자의 매치 기록을 처리합니다."""
             uid = user['uid']
             last_match_id = user['last_match_id']
             new_match_ids = []
@@ -255,7 +292,18 @@ class ERAPIClient:
         return match_id, data.model_dump() if data else None
 
     async def get_match_infos_async(self, match_ids: List[int], batch_size: int = 100) -> AsyncGenerator[Tuple[int, Any], None]:
-        """ 매치 id 목록으로 매치 정보 조회 """
+        """매치 ID 목록에 대한 상세 정보를 배치 단위로 조회합니다.
+
+        네트워크 부하를 분산하기 위해 batch_size 단위로 동시 요청하며,
+        완료되는 순서대로 결과를 yield합니다.
+
+        Args:
+            match_ids: 조회할 매치 ID 리스트.
+            batch_size: 동시 요청 수 (기본값: 100).
+
+        Yields:
+            (match_id, raw_data) 튜플. 실패한 매치는 yield되지 않음.
+        """
         for i in range(0, len(match_ids), batch_size):
             batch = match_ids[i:i + batch_size]
             tasks = [self.fetch_match_info(match_id) for match_id in batch]
