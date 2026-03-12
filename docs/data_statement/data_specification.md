@@ -692,7 +692,7 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 | 필드 | 설명 |
 |------|------|
 | `crGetAnimal` | 일반 동물 처치 획득 |
-| `crGetMutant` | 뮤턴트 처치 획득 |
+| `crGetMutant` | 변이동물 처치 획득 |
 | `crGetKill` | 플레이어 처치 획득 |
 | `crGetAssist` | 어시스트 획득 |
 | `crGetTimeElapsed` | 시간 경과 획득 |
@@ -760,7 +760,7 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 | 8 | 알파 (Alpha) |
 | 9 | 오메가 (Omega) |
 | 10 | 감마 (Gamma) |
-| 12 | 뮤턴트 계열 |
+| 12 | 변이동물 계열 |
 
 ### 장비 슬롯 (equipment / `equipFirstItemForLog` 키)
 
