@@ -603,12 +603,27 @@ def _parse_user_mmr_from_game(u: dict) -> Dict:
     }
 
 def parse_match_data(data: dict) -> Dict[str, List[Dict]]:
-    """
-    전체 매치 데이터 파싱
+    """전체 매치 데이터를 16개 테이블 포맷으로 파싱합니다.
+
+    단일 패스(Single Pass)에서 모든 유저 게임 데이터를 순회하며
+    Wide Format(1:1) 및 Long Format(1:N) 테이블로 분리합니다.
+
     Args:
-        data (dict): 매치 데이터 딕셔너리
+        data: API 원본 매치 데이터. 'userGames' 키에 유저별 데이터 포함.
+
     Returns:
-        Dict[str, List[Dict]]: 파싱된 매치 데이터
+        테이블명 -> 데이터 리스트 형태의 딕셔너리.
+        포함 테이블:
+            - match_info, match_team_info (매치/팀 정보)
+            - match_user_start/end/combat/damage/stats/sight/equipment/mmr (Wide)
+            - match_user_trait/credit_*/object/gadget (Long)
+
+    Raises:
+        ValueError: userGames 데이터가 없는 경우.
+
+    Example:
+        >>> parsed = parse_match_data(raw_api_response)
+        >>> save_data_to_db(engine, parsed)
     """
     try:
         # 1. Match Info

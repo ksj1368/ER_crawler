@@ -23,12 +23,15 @@ def log_memory():
     mem_info = process.memory_info()
     logger.info(f"[Memory] RSS: {mem_info.rss / 1024 / 1024:.2f} MB")
 
-async def seed_top_rankers():
-    """
-    Top 1000 랭커를 가져와 DB에 시드 유저로 추가합니다.
-    - 랭커 목록에서 닉네임을 가져옵니다.
-    - 각 닉네임을 사용하여 uid를 조회합니다.
-    - 조회된 유저 정보를 DB에 Upsert합니다.
+async def seed_top_rankers() -> None:
+    """Top 1000 랭커를 시드 유저로 등록합니다.
+
+    API에서 상위 랭커 목록을 조회하고, 각 닉네임에 대해 UID를 확인한 후
+    DB에 Upsert합니다. 초기 데이터 수집의 시작점 역할을 합니다.
+
+    Note:
+        이 함수는 DB에 활성 유저가 없을 때 run_pipeline()에 의해
+        자동으로 호출됩니다.
     """
     logger.info("--- Starting to seed top rankers ---")
     engine = get_engine()
@@ -57,12 +60,27 @@ async def seed_top_rankers():
     
     logger.info("--- Seeding top rankers finished ---")
 
-async def _fetch_and_save_raw_data(client, batch_match_ids, batch_index, storage) -> Tuple[List[Tuple[int, Dict[str, Any]]], set]:
-    """
-    API에서 매치 데이터를 수집하고 원본 데이터를 저장합니다.
-    반환값:
-    - raw_match_data_list: List of tuples (match_id, raw_data)
-    - batch_user_nicknames: Set of unique nicknames in the batch
+async def _fetch_and_save_raw_data(
+    client: ERAPIClient, 
+    batch_match_ids: List[int], 
+    batch_index: int, 
+    storage
+) -> Tuple[List[Tuple[int, Dict[str, Any]]], set]:
+    """API에서 매치 데이터를 수집하고 원본 JSON을 저장합니다.
+
+    수집된 원본 데이터는 데이터 레이크(S3/Local)에 즉시 저장하여
+    유실을 방지합니다.
+
+    Args:
+        client: ERAPIClient 인스턴스.
+        batch_match_ids: 이번 배치에서 조회할 매치 ID 리스트.
+        batch_index: 현재 배치 인덱스 (저장 경로 생성용).
+        storage: DataStorage 인스턴스 (LocalStorage 또는 S3Storage).
+
+    Returns:
+        Tuple 형태:
+            - raw_match_data_list: [(match_id, raw_data), ...]
+            - batch_user_nicknames: 배치 내 고유 닉네임 집합
     """
     raw_match_data_list = []
     batch_user_nicknames = set()
@@ -236,12 +254,14 @@ async def produce_batches(client: ERAPIClient, match_ids: List[int], queue: asyn
     logger.info("[Producer] All batches processed.")
 
 async def consume_batches(engine, queue: asyncio.Queue) -> None:
-    """
-    Consumer: Queue에서 데이터를 꺼내 DB에 저장
-    1. 큐(Queue)에서 배치를 꺼냄
-    2. 각 배치에 대해:
-            - DB에 저장
-    3. 예외 처리 및 종료    
+    """Consumer: Queue에서 데이터를 꺼내 DB에 저장합니다.
+
+    별도의 Executor 스레드에서 DB I/O를 수행하여 비동기 이벤트 루프를
+    블로킹하지 않습니다. Producer가 종료되면 CancelledError로 종료됩니다.
+
+    Args:
+        engine: SQLAlchemy Engine 인스턴스.
+        queue: Producer가 데이터를 적재하는 asyncio.Queue.
     """
     while True:
         try:
@@ -264,13 +284,19 @@ async def consume_batches(engine, queue: asyncio.Queue) -> None:
             queue.task_done() # 에러 발생 시에도 task_done 호출하여 데드락 방지
 
 async def run_pipeline() -> None:
-    """
-    데이터 수집 파이프라인
-    1. 활성 유저 유무 확인
-    2. 유저가 없으면(초기 상태) 자동으로 시드 데이터(Top Rankers) 수집
-    3. 유저가 있으면 기존 크롤링(스노우볼링) 로직 수행(Queue 기반 비동기 처리)
-    4. 각 유저의 last_match_id 갱신
-    5. 전체 처리 시간 로깅
+    """데이터 수집 파이프라인의 메인 엔트리포인트입니다.
+
+    전체 흐름:
+        1. 활성 유저 존재 여부 확인
+        2. 유저가 없으면 자동으로 시드 데이터(Top Rankers) 수집
+        3. 각 유저의 신규 매치 ID 수집 (스노우볼링)
+        4. Producer-Consumer 패턴으로 매치 데이터 수집 및 DB 저장
+        5. 각 유저의 last_match_id 갱신
+
+    Note:
+        이 함수는 main.py의 run_match_process() 또는 Airflow DAG에서
+        호출됩니다. 환경변수 USER_BATCH_LIMIT으로 한 번에 처리할
+        유저 수를 제한할 수 있습니다.
     """
     pipeline_start_time = time()
     logger.info("--- Start Pipeline (Async Queue) ---")
