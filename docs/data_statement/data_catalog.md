@@ -336,7 +336,7 @@ ORDER BY pick_count DESC;
 | `match_user_combat` | 전투 스타일 비교 |
 | `match_user_damage` | 데미지 패턴 |
 | `match_user_object` | 오브젝트 확보율 |
-| `match_user_sight` | 시야 확보 행태 |
+| `match_user_sight` | 시야 점수 |
 
 ---
 
