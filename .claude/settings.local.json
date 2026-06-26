@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(find /c/Users/JSJ/eternal_return_crawler -type f -name \"*.ipynb\" | xargs ls -lh)",
+      "Bash(grep -i \"text.to.sql\\\\|semantic\\\\|nl2sql\\\\|query.*generation\\\\|halluc\" /c/Users/JSJ/eternal_return_crawler/.reports/*.md 2>/dev/null | head -20)",
+      "Bash(ls -lh /c/Users/JSJ/eternal_return_crawler/*.ipynb)",
+      "Bash(find /c/Users/JSJ/eternal_return_crawler/.reports -name \"*query*\" -o -name \"*sql*\" -o -name \"*test*\" 2>/dev/null | head -10)",
+      "WebFetch(domain:docs.eraser.io)"
+    ]
+  }
+}

@@ -45,7 +45,7 @@ async def seed_top_rankers() -> None:
             return
         
         nicknames = top_ranker_nicknames(rankers_json)
-        # nicknames = nicknames[:1000] # 디버그용 샘플링
+        nicknames = nicknames[:200] # 디버그용 샘플링
         logger.info(f"Found {len(nicknames)} top ranker nicknames.")
         
         # 닉네임으로 uid 조회
@@ -371,7 +371,7 @@ async def run_pipeline() -> None:
         
         existing_match_ids = check_match_exists(engine, list(all_new_match_ids)) # 기존 매치 ID 조회
         final_match_ids_to_process = list(all_new_match_ids - existing_match_ids) # 신규 매치 ID 필터링
-        # final_match_ids_to_process = final_match_ids_to_process[:1000] # 디버그용 샘플링
+        final_match_ids_to_process = final_match_ids_to_process[:1000] # 디버그용 샘플링
         logger.info(f"Step 3: Filtering new matches finished in {time() - step_start_time:.2f}s")
         
         if not final_match_ids_to_process:

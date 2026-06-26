@@ -25,7 +25,7 @@ BASE_URL = URLS['base_url']
 T = TypeVar('T', bound=BaseModel) # Pydantic 모델 타입 변수
 
 # 전역 Rate Limiter 설정 (초당 50 요청)
-GLOBAL_LIMITER = AsyncLimiter(50, 1)
+GLOBAL_LIMITER = AsyncLimiter(5, 1)
 
 class ERAPIClient:
     def __init__(self, api_key: Optional[str] = None): # API Key를 인자로 받거나 환경 변수에서 로드

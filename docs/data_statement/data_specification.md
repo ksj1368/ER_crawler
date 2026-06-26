@@ -1,6 +1,6 @@
 # Eternal Return Crawler - 데이터 명세서
 
-> **문서 버전**: v2.3 | **최종 수정**: 2026-03-09 | **대상 시즌**: Season 9
+> **문서 버전**: v2.4 | **최종 수정**: 2026-03-16 | **대상 시즌**: Season 9
 > **Schema 기준**: Alembic `38cbb6ad2222` (initial_schema)
 
 ---
@@ -33,9 +33,12 @@
 | 식별자 | 설명 | 특징 |
 |--------|------|------|
 | `match_id` | 매치 고유 ID | API의 `gameId`, BIGINT |
-| `uid` | 유저 API 식별자 | 128자 문자열, 불변 |
+| `uid` | 유저 API 식별자 | VARCHAR(128), **닉네임 변경 시 함께 변경됨** |
 | `user_num` | 내부 유저 ID | Auto Increment, FK로 사용 |
 | `character_num` | 캐릭터 ID | `character_info.character_id`와 조인 |
+
+> [!WARNING]
+> **UID 불변성 주의**: 25년 11월 25일 이후 nickname 을 호출 할 때 마다, userId 는 다른 값을 반환 합니다. 즉, `uid`는 영구적이지 않으며, **유저가 닉네임을 변경할 때마다 uid도 변경**됩니다. 닉네임 변경 이전에 플레이한 경기는 신규 uid로 조회 시 포함되지 않습니다. 또한 API v1에서 `userNum` 기반 조회는 더 이상 지원되지 않으며, 모든 사용자 엔드포인트는 `uid`를 사용합니다.
 
 ---
 
@@ -133,9 +136,9 @@ PK = (entity_id, season, major_version, minor_version)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | `character_id` | INT PK | 캐릭터 ID |
-| `season` | INT PK | 시즌 번호 |
-| `major_version` | INT PK | 메이저 버전 |
-| `minor_version` | INT PK | 마이너 버전 |
+| `season` | INT PK | 시즌 ID |
+| `major_version` | INT | 메이저 패치 버전 |
+| `minor_version` | INT | 마이너 패치 버전 |
 | `character_name` | VARCHAR(255) | 캐릭터 이름 |
 | `archetype_primary` | VARCHAR(255) | 주 역할군 |
 | `archetype_secondary` | VARCHAR(255) | 부 역할군 |
@@ -170,14 +173,14 @@ PK = (entity_id, season, major_version, minor_version)
 | 테이블 | 설명 |
 |--------|------|
 | character_levelup_stats | 캐릭터 레벨업 당 스탯 증가량 |
-| area_info | 지역(맵) 정보 |
+| area_info | 지역 정보 |
 | monster_info | 야생동물/에픽 몬스터 정보 |
-| trait_info | 특성(Trait) 정보 |
+| trait_info | 특성 정보 |
 | weather_info | 날씨 정보 |
 | installation_info | 설치물 정보 |
-| weapon_types | 무기 타입 코드 매핑 (수동) |
-| armor_types | 방어구 타입 코드 매핑 (수동) |
-| tactical_skills | 전술 스킬 코드 매핑 (수동) |
+| weapon_types | 무기 타입 코드 매핑 |
+| armor_types | 방어구 타입 코드 매핑 |
+| tactical_skills | 전술 스킬 코드 매핑 |
 
 ---
 
@@ -188,25 +191,25 @@ PK = (entity_id, season, major_version, minor_version)
 
 | 컬럼 | 타입 | 설명 | 비고 |
 |------|------|------|------|
-| `match_id` | INT PK | 매치 고유 ID | API: `gameId` |
+| `match_id` | INT PK | 매치 고유 ID | API: `gameId`, index |
 | `season_id` | INT | 시즌 ID | |
-| `version_season` | INT | 버전 시즌 | |
-| `version_major` | INT | 메이저 버전 | |
-| `version_minor` | INT | 마이너 버전 | |
+| `version_season` | INT | 시즌 | |
+| `version_major` | INT | 메이저 패치 버전 | |
+| `version_minor` | INT | 마이너 패치 버전 | |
 | `matching_mode` | INT | 매칭 모드 | 3=랭크 |
 | `matching_team_mode` | INT | 팀 모드 | 1=솔로, 2=듀오, 3=스쿼드 |
 | `server_name` | VARCHAR(32) | 서버 이름 | |
-| `match_size` | INT | 참가 인원 수 | `len(userGames)` |
-| `start_dtm` | DATETIME | 매치 시작 시간 | **INDEX** |
+| `match_size` | INT | 참가 인원 수 | `len(userGames)` (21명 또는 24명 고정) |
+| `start_dtm` | DATETIME | 매치 시작 시간 | |
 | `duration` | INT | 매치 진행 시간(초) | 최소 `totalTime` |
 | `expired_tm` | DATETIME | 매치 만료 시간 | |
 | `mmr_avg` | INT | 평균 MMR | |
 | `main_weather` | INT | 메인 날씨 | |
 | `sub_weather` | INT | 서브 날씨 | |
 | `bot_added` | INT | 봇 추가 수 | |
-| `bot_remain` | INT | 남은 봇 수 | |
+| `bot_remain` | INT | 매치 종료 시점에 남아있는 봇의 수 | |
 | `safe_areas` | INT | 안전 구역 수 | |
-| `restricted_area_accelerated` | INT | 금지구역 가속 여부 | |
+| `restricted_area_accelerated` | BOOLEAN | 금지구역 가속 여부 | |
 
 ---
 
@@ -221,14 +224,14 @@ PK = (entity_id, season, major_version, minor_version)
 | `team_kill` | INT | 팀 킬 수 |
 | `total_field_kill` | INT | 필드 킬 수 |
 | `team_elimination` | INT | 팀 처치 수 |
-| `team_down` | INT | 팀 다운 수 |
-| `team_repeat_down` | INT | 팀 연속 다운 수 |
-| `team_battle_zone_down` | INT | 팀 배틀존 다운 수 |
+| `team_down` | INT | 팀 처치 수 |
+| `team_repeat_down` | INT | 팀 연속 처치 수 |
+| `team_battle_zone_down` | INT | 팀 배틀존 처치 수 |
 | `escape_state` | INT | 탈출 상태 |
-| `team_down_cannot_eliminate` | INT | 처형 불가 다운 수 |
-| `team_down_can_eliminate` | INT | 처형 가능 다운 수 |
-| `team_repeat_down_cannot_eliminate` | INT | 처형 불가 연속 다운 수 |
-| `team_repeat_down_can_eliminate` | INT | 처형 가능 연속 다운 수 |
+| `team_down_cannot_eliminate` | INT | 사출방지 일자 처치 수 |
+| `team_down_can_eliminate` | INT | 사출미방지 일자 처치 수 |
+| `team_repeat_down_cannot_eliminate` | INT | 사출방지 일자 연속 처치 수 |
+| `team_repeat_down_can_eliminate` | INT | 사출미방지 일자 연속 처치 수 |
 
 ---
 
@@ -242,10 +245,10 @@ PK = (entity_id, season, major_version, minor_version)
 | `nickname` | VARCHAR(128) | 매치 당시 닉네임 | |
 | `character_num` | INT | 사용 캐릭터 ID | **INDEX** |
 | `team_number` | INT | 팀 번호 | FK → match_team_info |
-| `language` | VARCHAR(255) | 클라이언트 언어 | |
+| `language` | VARCHAR(255) | 사용자 설정 언어 | |
 | `skin_code` | INT | 스킨 코드 | |
-| `premade` | INT | 파티원 수 | |
-| `except_premade_team` | INT | 예외 파티 팀 | |
+| `premade` | BOOLEAN | 사전구성 팀 여부 | |
+| `except_premade_team` | BOOLEAN | 비사전구성 팀 여부 | |
 | `route_id_of_start` | INT | 시작 루트 ID | |
 | `place_of_start` | INT | 시작 지역 | |
 | `using_default_game_option` | BOOLEAN | 기본 설정 사용 여부 | |
@@ -271,17 +274,17 @@ PK = (entity_id, season, major_version, minor_version)
 | `craft_uncommon` ~ `craft_mythic` | INT | 등급별 제작 횟수 |
 | `use_hyperloop` | INT | 하이퍼루프 사용 횟수 |
 | `use_security_console` | INT | 보안 콘솔 사용 횟수 |
-| `break_count` | INT | 박스 파괴 횟수 |
+| `break_count` | INT | 사출방지 일자 팀 전멸시킨 횟수 |
 | `enter_dimension_rift` | INT | 차원 균열 진입 횟수 |
 | `enter_dimension_empowered_rift` | INT | 강화 차원 균열 진입 횟수 |
 | `win_dimension_rift` | INT | 차원 균열 승리 횟수 |
 | `win_dimension_empowered_rift` | INT | 강화 차원 균열 승리 횟수 |
-| `resurrectionkit_count` | INT | 부활 키트 사용 횟수 |
-| `resurrectionkit_credit_count` | INT | 크레딧 부활 키트 사용 횟수 |
+| `resurrectionkit_count` | INT | 부활 횟수 |
+| `resurrectionkit_credit_count` | INT | 크레딧 부활 횟수 |
 | `fishing_count` | INT | 낚시 횟수 |
 | `emoticon_count` | INT | 이모티콘 사용 횟수 |
-| `used_pairloop` | INT | 페어루프 사용 횟수 |
-| `give_up` | INT | 포기 횟수 |
+| `used_pairloop` | INT | 루프 사용 횟수 |
+| `give_up` | BOOLEAN | 포기 여부 |
 | `team_spectator` | INT | 팀 관전 횟수 |
 | `is_leaving_before_credit_revival_terminate` | BOOLEAN | 크레딧 부활 전 이탈 여부 |
 
@@ -300,14 +303,14 @@ PK = (entity_id, season, major_version, minor_version)
 | `monster_kill` | INT | 몬스터 킬 수 |
 | `kills_phase_one` ~ `kills_phase_three` | INT | 페이즈별 킬 수 |
 | `deaths_phase_one` ~ `deaths_phase_three` | INT | 페이즈별 사망 수 |
-| `terminate_count` | INT | 처형 횟수 |
-| `terminate_count_cannot_eliminate` | INT | 처형 불가 처형 횟수 |
+| `terminate_count` | INT | 팀 전원 처치 횟수 |
+| `terminate_count_cannot_eliminate` | INT | 사출방지 일자 팀 전멸 횟수 |
 | `clutch_count` | INT | 클러치 횟수 |
 | `unknown_kill` | INT | 원인 불명 킬 수 |
 | `cc_time_to_player` | FLOAT | CC기 적중 시간 |
 | `credit_revival_count` | INT | 크레딧 부활 횟수 |
 | `credit_revived_others_count` | INT | 타인 크레딧 부활 횟수 |
-| `reunited_count` | INT | 재합류 횟수 |
+| `reunited_count` | INT | 팀원 모두 부활 시킨 횟수 |
 | `tactical_skill_count` | INT | 전술 스킬 사용 횟수 |
 
 ---
@@ -327,7 +330,7 @@ PK = (entity_id, season, major_version, minor_version)
 - `_basic`: 기본 공격
 - `_skill`: 스킬
 - `_item_skill`: 아이템 스킬
-- `_direct`: 직접 데미지
+- `_direct`: 고정 데미지
 - `_trap`: 트랩
 - `_unique_skill`: 고유 스킬
 
@@ -350,7 +353,7 @@ PK = (entity_id, season, major_version, minor_version)
 
 | 컬럼 | 설명 |
 |------|------|
-| `first_weapon` ~ `first_leg` | **첫 완성** 장비 (무기/갑옷/투구/팔/다리) |
+| `first_weapon` ~ `first_leg` | **첫 완성** 장비 (무기/옷/머리/팔(장식)/다리) |
 | `last_weapon` ~ `last_leg` | **최종** 장비 |
 | `best_weapon` | 가장 높은 등급 무기 |
 | `best_weapon_level` | 가장 높은 무기 레벨 |
@@ -404,13 +407,16 @@ MMR 변동 정보입니다.
 ### 2.10 match_user_sight
 시야 및 정찰 관련 정보입니다.
 
-| 컬럼 | 설명 |
-|------|------|
-| `sight_score` | 시야 기여도 점수 |
-| `camera_setup` | 카메라 설치 횟수 |
-| `camera_remove` | 카메라 제거 횟수 |
-| `emp_drone_setup` | EMP 드론 사용 횟수 |
-| `basic_drone_setup` | 정찰 드론 사용 횟수 |
+| 컬럼 | API 필드 | 설명 |
+|------|----------|------|
+| `sight_score` | `viewContribution` | 시야 기여도 점수 |
+| `camera_setup` | `addTelephotoCamera` | 망원 카메라 설치 횟수 |
+| `camera_remove` | `removeTelephotoCamera` | 망원 카메라 제거 횟수 |
+| `emp_drone_setup` | `useEmpDrone` | EMP 드론 사용 횟수 |
+| `basic_drone_setup` | `useReconDrone` | 정찰 드론 사용 횟수 |
+
+> [!NOTE]
+> 감시 카메라(`addSurveillanceCamera`, `removeSurveillanceCamera`)는 망원 카메라와 별개의 아이템으로 현재 모든 값이 0으로 고정되어 있습니다. 
 
 ---
 
@@ -426,7 +432,12 @@ MMR 변동 정보입니다.
 | `match_id` | BIGINT PK | 매치 ID |
 | `user_num` | INT PK | 유저 ID |
 | `trait_id` | INT PK | 특성 ID |
-| `trait_type` | VARCHAR(20) | 특성 타입 (`first_sub`, `second_sub`) |
+| `trait_type` | VARCHAR(20) | 특성 타입 (`first_core`, `first_sub`, `second_sub`) |
+
+> [!NOTE]
+> - `traitFirstCore` (API): 단일 정수값 → `trait_type = 'first_core'`로 1행 저장
+> - `traitFirstSub` (API): 정수 배열 → `trait_type = 'first_sub'`로 각 원소당 1행 저장
+> - `traitSecondSub` (API): 정수 배열 → `trait_type = 'second_sub'`로 각 원소당 1행 저장
 
 ---
 
@@ -654,45 +665,198 @@ LIMIT 10;
 | `battleZone1AreaCode` ~ `battleZone3AreaCode` | INT | 배틀존 지역 코드 |
 | `battleZone1BattleMark` ~ `battleZone3BattleMark` | INT | 배틀존 마크 |
 | `battleZone1ItemCode` ~ `battleZone3ItemCode` | Array | 배틀존 획득 아이템 |
-| `battleZone1Winner` ~ `battleZone3Winner` | INT | 배틀존 승리 여부 |
+| `battleZone1Winner` ~ `battleZone3Winner` | BOOLEAN | 배틀존 승리 여부 |
 | `battleZonePlayerKill` | INT | 배틀존 내 킬 수 |
 | `battleZoneDeaths` | INT | 배틀존 내 사망 수 |
 
 #### 음식 및 아이템 수집
 
-| 필드 | 타입 | 설명 | 인덱스 의미 |
-|------|------|------|-------------|
+| 필드 | 타입 | 설명 | 비고 |
+|------|------|------|------|
 | `foodCraftCount` | Array[7] | 음식 등급별 제작 횟수 | 0-6: 등급 |
-| `collectItemForLog` | Array[10] | 아이템 수집 로그 | 4=생명의나무, 5=운석 등 |
-| `itemTransferredConsole` | Array | 콘솔에서 전송받은 아이템 | |
-| `itemTransferredDrone` | Array | 드론에서 전송받은 아이템 | |
-| `boughtInfusion` | String (JSON) | 구매한 인퓨전 | |
+| `beverageCraftCount` | Object | 등급별 음료 제작 횟수 | |
+| `airSupplyOpenCount` | Object | 공중 보급 상자 개봉 횟수 | 보급 등급별 |
+| `collectItemForLog` | Array[10] | 수집품 수집 횟수 | CollectibleCode 인덱스 |
+| `itemTransferredConsole` | Array | 전송 콘솔로 요청한 아이템 코드 목록 | |
+| `itemTransferredDrone` | Array | 전송 드론으로 요청한 아이템 코드 목록 | |
+| `boughtInfusion` | String (JSON) | 구매한 인퓨전 | **[COBALT 전용]** |
+| `finalInfusion` | int[3] | 최종 보유 특성 인퓨전 3개 | **[COBALT 전용]** |
 
-#### 기타 미수집 필드
+#### 스탯 미수집 필드
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `totalTKPerMin` | Array[20] | 분당 팀 킬 수 |
-| `scoredPoint` | Array[20] | 분당 점수 포인트 |
-| `squadRumbleRank` | INT | 스쿼드 럼블 순위 |
-| `accountLevel` | INT | 계정 레벨 |
-| `survivableTime` | INT | 생존 가능 시간 |
-| `getBoriReward` | Object | 보리 보상 |
-| `activeInstallation` | Object | 활성화된 설치물 | `{"4": 5, "1": 1}` |
+| `maxSp` | INT | 최대 SP |
+| `spRegen` | FLOAT | SP 재생 |
+| `amplifierToMonster` | FLOAT | 몬스터 대상 증폭 |
+| `trapDamage` | FLOAT | 트랩 데미지 |
+
+#### 경험치 관련 미수집 필드
+
+| 필드 | 타입 | 설명 | 비고 |
+|------|------|------|------|
+| `gainExp` | INT | 매치 종료 후 계정이 획득한 경험치 | PDF 공식 정의 |
+| `baseExp` | INT | 기본 경험치 | 실제 데이터에만 존재 |
+| `bonusExp` | INT | 보너스 경험치 | 실제 데이터에만 존재 |
+| `bonusCoin` | INT | 보너스 코인 | 실제 데이터에만 존재 |
+
+#### MMR 관련 미수집 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `gainedNormalMmrKFactor` | FLOAT | 일반 MMR K-factor (**Deprecated** - 더 이상 지원되지 않음) |
+
+#### 전투 상세 미수집 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `totalDoubleKill` | INT | 더블킬 횟수 |
+| `totalTripleKill` | INT | 트리플킬 횟수 |
+| `totalQuadraKill` | INT | 쿼드라킬 횟수 |
+| `totalExtraKill` | INT | 5킬 이상 연속킬 횟수 |
+
+#### 크레딧 상세 미수집 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `activelyGainedCredits` | INT | 자동 획득 크레딧 합계 |
+| `sumUsedVFCredits` | INT | 크레딧 소모 합계 |
+| `totalGainVFCredit` | INT | 크레딧 총 획득량 |
+| `killPlayerGainVFCredit` | INT | 플레이어 처치 크레딧 |
+| `killChickenGainVFCredit` | INT | 닭 처치 크레딧 |
+| `killBoarGainVFCredit` | INT | 멧돼지 처치 크레딧 |
+| `killWildDogGainVFCredit` | INT | 들개 처치 크레딧 |
+| `killWolfGainVFCredit` | INT | 늑대 처치 크레딧 |
+| `killBearGainVFCredit` | INT | 곰 처치 크레딧 |
+| `killOmegaGainVFCredit` | INT | 오메가 처치 크레딧 |
+| `killBatGainVFCredit` | INT | 박쥐 처치 크레딧 |
+| `killWicklineGainVFCredit` | INT | 위클라인 처치 크레딧 |
+| `killAlphaGainVFCredit` | INT | 알파 처치 크레딧 |
+| `killGammaGainVFCredit` | INT | 감마 처치 크레딧 |
+| `killItemBountyGainVFCredit` | INT | 현상금 아이템 크레딧 |
+| `killDroneGainVFCredit` | INT | 드론 처치 크레딧 |
+| `killTurretGainVFCredit` | INT | 터렛 처치 크레딧 |
+| `itemShredderGainVFCredit` | INT | 아이템 분쇄 크레딧 |
+| `remoteDroneUseVFCreditMySelf` | INT | 원격 드론(자신) 크레딧 소모 |
+| `remoteDroneUseVFCreditAlly` | INT | 원격 드론(아군) 크레딧 소모 |
+| `kioskFromMaterialUseVFCredit` | INT | 키오스크 재료 크레딧 소모 (`transferConsoleFromMaterialUseVFCredit`) |
+| `kioskFromEscapeKeyUseVFCredit` | INT | 키오스크 탈출 키트 크레딧 소모 (`transferConsoleFromEscapeKeyUseVFCredit`) |
+| `kioskFromRevivalUseVFCredit` | INT | 키오스크 부활 크레딧 소모 (`transferConsoleFromRevivalUseVFCredit`) |
+| `tacticalSkillUpgradeUseVFCredit` | INT | 전술 스킬 업그레이드 크레딧 소모 |
+| `infusionReRollUseVFCredit` | INT | 인퓨전 리롤 크레딧 소모(**[COBALT 전용]**) |
+| `infusionTraitUseVFCredit` | INT | 인퓨전 특성 크레딧 소모(**[COBALT 전용]**) |
+| `infusionRelicUseVFCredit` | INT | 인퓨전 유물 크레딧 소모(**[COBALT 전용]**) |
+| `infusionStoreUseVFCredit` | INT | 인퓨전 상점 크레딧 소모(**[COBALT 전용]**) |
+| `crGetPhaseStart` | INT | 매치 시작시 제공되는 크레딧 |
+
+#### 아이템/제작 미수집 필드
+
+| 필드 | 타입 | 설명 | 비고 |
+|------|------|------|------|
+| `campFireCraftUncommon` | INT | Uncommon 음식 제작 횟수 | |
+| `campFireCraftRare` | INT | Rare 음식 제작 횟수 | |
+| `campFireCraftEpic` | INT | Epic 음식 제작 횟수 | |
+| `campFireCraftLegendary` | INT | Legendary 음식 제작 횟수 | |
+| `usedNormalHealPack` | INT | 일반 회복 팩 사용량 | **[COBALT 전용]** |
+| `usedReinforcedHealPack` | INT | 강화 회복 팩 사용량 | **[COBALT 전용]** |
+| `usedNormalShieldPack` | INT | 일반 보호막 팩 사용량 (`usedNormalShiedPack`) | **[COBALT 전용]** |
+| `usedReinforcedShieldPack` | INT | 강화 보호막 팩 사용량 | **[COBALT 전용]** |
+| `StartingItems` | int[7] | 초기 획득 아이템 세트 (보통 6개) | **[COBALT 전용]** |
+
+#### 시야 미수집 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `addSurveillanceCamera` | INT | 감시 카메라 설치 횟수 |
+| `removeSurveillanceCamera` | INT | 감시 카메라 제거 횟수 |
+
+#### 가이드 로봇(루미) 미수집 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `useGuideRobot` | INT | 루미 사용 횟수 |
+| `guideRobotRadial` | INT | 루미에서 Radial 등급 아이템 구매 크레딧 |
+| `guideRobotFlagShip` | INT | 루미에서 FlagShip 등급 아이템 구매 크레딧 |
+| `guideRobotSignature` | INT | 루미에서 Signature 등급 아이템 구매 크레딧 |
+
+#### 전투 상세 미수집 필드 (COBALT 전용)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `killsPhaseOne` | INT | 페이즈 1 처치 수 |
+| `killsPhaseTwo` | INT | 페이즈 2 처치 수 |
+| `killsPhaseThree` | INT | 페이즈 3 처치 수 |
+| `deathsPhaseOne` | INT | 페이즈 1 사망 수 |
+| `deathsPhaseTwo` | INT | 페이즈 2 사망 수 |
+| `deathsPhaseThree` | INT | 페이즈 3 사망 수 |
+
+> [!NOTE]
+> 현재 스펙에서 `kills_phase_one` 등은 DB에 수집됩니다. PDF에 따르면 이 필드들은 **[COBALT 전용]**이지만 실제 랭크 매치 데이터에도 존재하는 것으로 확인됩니다.
+
+#### 기타 미수집 필드
+
+| 필드 | 타입 | 설명 | 비고 |
+|------|------|------|------|
+| `totalTKPerMin` | Array[20] | 분당 팀 킬 수 | |
+| `scoredPoint` | Array[20] | 분당 점수 포인트 | **[COBALT 전용]** |
+| `squadRumbleRank` | INT | 스쿼드 럼블 순위 | **[스쿼드 럼블 전용]** |
+| `accountLevel` | INT | 계정 레벨 | |
+| `survivableTime` | INT | 생존 가능 시간 | |
+| `getBoriReward` | Object | 보리 처치 시 드롭 상자 등급 및 횟수 | |
+| `activeInstallation` | Object | 게임에서 사용된 환경변수 사용 횟수 | `{"4": 5, "1": 1}` |
 | `equipmentGrade` | Object | 장비 등급 | `{"0": 5, "1": 5}` |
+| `sumGetBuffCube` | INT | 큐브 총 획득 수 | |
+| `routeSlotId` | INT | 선택한 경로의 슬롯 ID | |
+| `totalTurbineTakeOver` | INT | 증폭기 점령 성공 횟수 | **[COBALT 전용]** |
+| `enterTurbulentRift` | INT | 난류 진입 횟수 | |
+| `killGamma` | BOOLEAN | 감마 처치 여부 (처치자만) | |
+| `cobaltRandomPickRemoveCharacter` | INT | 무작위 선택에서 제거한 캐릭터 코드 | **[COBALT 전용]** |
+| `afkDtm` | DATETIME | 자리 비움 시간 | |
+| `giveupDtm` | DATETIME | 포기 시간 | |
+| `killDetails` | Object | 처치한 캐릭터별 횟수 딕셔너리 | `<캐릭터코드, 횟수>` |
+| `deathDetails` | Object | 처치당한 캐릭터별 횟수 딕셔너리 | `<캐릭터코드, 횟수>` |
+
+#### Deprecated 필드 (battleZone 관련)
+
+> [!WARNING]
+> 아래 필드들은 API 공식 문서에서 **사용 중단(Deprecated)**으로 표시되었습니다.
+
+| 필드 | 비고 |
+|------|------|
+| `battleZone1/2/3AreaCode` | Deprecated |
+| `battleZone1/2/3BattleMark` | Deprecated |
+| `battleZone1/2/3ItemCode` | Deprecated |
+| `battleZone1/2/3Winner` | Deprecated |
+| `battleZone1/2/3BattleMarkCount` | Deprecated |
+| `battleZonePlayerKillCount` | Deprecated (`battleZonePlayerKill`로 데이터 내 존재) |
+| `battleZonePlayerDeathCount` | Deprecated |
+| `battleZoneDeaths` | Deprecated |
+| `teamDownInAutoResurrection` | Deprecated |
+| `teamDownDeactiveAutoResurrection` | Deprecated |
+| `teamRepeatDownInAutoResurrection` | Deprecated |
+| `teamRepeatDownDeactiveAutoResurrection` | Deprecated |
+
+#### 레거시 필드 (Deprecated, 데이터는 반환되나 해석 방법 미지원)
+
+| 필드 | 설명 |
+|------|------|
+| `killerUserNum` / `killerUserNum2` / `killerUserNum3` | 처치자 userNum (레거시) |
+| `killer` / `killer2` / `killer3` | 처치 주체 식별자 (레거시) |
+| `killDetail` / `killDetail2` / `killDetail3` | 처치자 닉네임 (레거시) |
+| `causeOfDeath` / `causeOfDeath2` / `causeOfDeath3` | 사망 원인 스킬명 (레거시) |
+| `placeOfDeath` / `placeOfDeath2` / `placeOfDeath3` | 사망 지역 ID (레거시) |
+| `killerCharacter` / `killerCharacter2` / `killerCharacter3` | 처치자 캐릭터명 (레거시) |
+| `killerWeapon` / `killerWeapon2` / `killerWeapon3` | 처치자 무기 (레거시) |
 
 ---
 
 ### 크레딧 관련 상세 필드
-
-API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
-
 #### 크레딧 획득 상세 (`creditSource` 대응)
 
 | 필드 | 설명 |
 |------|------|
 | `crGetAnimal` | 일반 동물 처치 획득 |
-| `crGetMutant` | 뮤턴트 처치 획득 |
+| `crGetMutant` | 변이 동물 처치 획득 |
 | `crGetKill` | 플레이어 처치 획득 |
 | `crGetAssist` | 어시스트 획득 |
 | `crGetTimeElapsed` | 시간 경과 획득 |
@@ -709,7 +873,7 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 | `crUseMythril` | 미스릴 사용 |
 | `crUseForceCore` | 포스코어 사용 |
 | `crUseVFBloodSample` | VF 혈액 샘플 사용 |
-| `crUseActivationModule` | 활성화 모듈 사용 |
+| `crUseActivationModule` | 전술 스킬 업그레이드 사용 |
 | `crUseRootkit` | 루트킷 사용 |
 
 ---
@@ -719,28 +883,127 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 | API 필드 | DB 컬럼 | 테이블 |
 |----------|---------|--------|
 | `gameId` | `match_id` | match_info |
+| `seasonId` | `season_id` | match_info |
+| `versionSeason` | `version_season` | match_info |
+| `versionMajor` | `version_major` | match_info |
+| `versionMinor` | `version_minor` | match_info |
 | `startDtm` | `start_dtm` | match_info |
-| `totalTime` (min) | `duration` | match_info |
+| `duration` | `duration` | match_info |
+| `matchSize` | `match_size` | match_info |
+| `mmrAvg` | `mmr_avg` | match_info |
+| `mainWeather` | `main_weather` | match_info |
+| `subWeather` | `sub_weather` | match_info |
+| `botAdded` | `bot_added` | match_info |
+| `botRemain` | `bot_remain` | match_info |
+| `safeAreas` | `safe_areas` | match_info |
+| `restrictedAreaAccelerated` | `restricted_area_accelerated` | match_info |
+| `serverName` | `server_name` | match_info |
+| `matchingMode` | `matching_mode` | match_info |
+| `matchingTeamMode` | `matching_team_mode` | match_info |
+| `expireDtm` | `expired_tm` | match_info |
+| `teamNumber` → 팀 단위 집계 | `game_rank`, `team_kill` 등 | match_team_info |
+| `escapeState` | `escape_state` | match_team_info |
+| `teamKill` | `team_kill` | match_team_info |
+| `totalFieldKill` | `total_field_kill` | match_team_info |
+| `teamElimination` | `team_elimination` | match_team_info |
+| `teamDown` | `team_down` | match_team_info |
+| `teamRepeatDown` | `team_repeat_down` | match_team_info |
+| `teamBattleZoneDown` | `team_battle_zone_down` | match_team_info |
+| `teamDownCanNotEliminate` | `team_down_cannot_eliminate` | match_team_info |
+| `teamDownCanEliminate` | `team_down_can_eliminate` | match_team_info |
+| `teamRepeatDownCanNotEliminate` | `team_repeat_down_cannot_eliminate` | match_team_info |
+| `teamRepeatDownCanEliminate` | `team_repeat_down_can_eliminate` | match_team_info |
 | `characterNum` | `character_num` | match_user_start |
 | `preMade` | `premade` | match_user_start |
 | `tacticalSkillGroup` | `tactical_skill_id` | match_user_start |
 | `mlbot` | `ml_bot` | match_user_start |
+| `skinCode` | `skin_code` | match_user_start |
+| `language` | `language` | match_user_start |
+| `routeIdOfStart` | `route_id_of_start` | match_user_start |
+| `placeOfStart` | `place_of_start` | match_user_start |
+| `usingDefaultGameOption` | `using_default_game_option` | match_user_start |
+| `premadeMatchingType` | `premade_matching_type` | match_user_start |
+| `exceptPreMadeTeam` | `except_premade_team` | match_user_start |
+| `victory` | `victory` | match_user_end |
+| `playTime` | `play_time` | match_user_end |
+| `watchTime` | `watch_time` | match_user_end |
+| `totalTime` | `total_time` | match_user_end |
+| `timeSpentInBriefingRoom` | `time_spent_in_briefing_room` | match_user_end |
+| `craftUncommon` ~ `craftMythic` | `craft_uncommon` ~ `craft_mythic` | match_user_end |
+| `useHyperLoop` | `use_hyperloop` | match_user_end |
+| `useSecurityConsole` | `use_security_console` | match_user_end |
+| `breakCount` | `break_count` | match_user_end |
+| `enterDimensionRift` | `enter_dimension_rift` | match_user_end |
+| `enterDimensionEmpoweredRift` | `enter_dimension_empowered_rift` | match_user_end |
+| `winFromDimensionRift` | `win_dimension_rift` | match_user_end |
+| `winFromDimensionEmpoweredRift` | `win_dimension_empowered_rift` | match_user_end |
+| `resurrectionKitUsageCount` | `resurrectionkit_count` | match_user_end |
+| `resurrectionKitToCredit` | `resurrectionkit_credit_count` | match_user_end |
+| `fishingCount` | `fishing_count` | match_user_end |
+| `useEmoticonCount` | `emoticon_count` | match_user_end |
+| `usedPairLoop` | `used_pairloop` | match_user_end |
+| `giveUp` | `give_up` | match_user_end |
+| `teamSpectator` | `team_spectator` | match_user_end |
+| `isLeavingBeforeCreditRevivalTerminate` | `is_leaving_before_credit_revival_terminate` | match_user_end |
 | `playerKill` | `player_kill` | match_user_combat |
 | `playerAssistant` | `player_assistant` | match_user_combat |
+| `playerDeaths` | `player_deaths` | match_user_combat |
+| `monsterKill` | `monster_kill` | match_user_combat |
+| `characterLevel` | `character_level` | match_user_combat |
+| `tacticalSkillLevel` | `tactical_skill_level` | match_user_combat |
+| `killsPhaseOne` ~ `killsPhaseThree` | `kills_phase_one` ~ `kills_phase_three` | match_user_combat |
+| `deathsPhaseOne` ~ `deathsPhaseThree` | `deaths_phase_one` ~ `deaths_phase_three` | match_user_combat |
+| `terminateCount` | `terminate_count` | match_user_combat |
+| `terminateCountCanNotEliminate` | `terminate_count_cannot_eliminate` | match_user_combat |
+| `clutchCount` | `clutch_count` | match_user_combat |
+| `unknownKill` | `unknown_kill` | match_user_combat |
 | `ccTimeToPlayer` | `cc_time_to_player` | match_user_combat |
+| `creditRevivalCount` | `credit_revival_count` | match_user_combat |
+| `creditRevivedOthersCount` | `credit_revived_others_count` | match_user_combat |
+| `reunitedCount` | `reunited_count` | match_user_combat |
+| `tacticalSkillUseCount` | `tactical_skill_count` | match_user_combat |
+| `maxHp` | `max_hp` | match_user_stats |
+| `hpRegen` | `hp_regen` | match_user_stats |
+| `attackPower` | `attack_power` | match_user_stats |
+| `attackSpeed` | `attack_speed` | match_user_stats |
+| `defense` | `defense` | match_user_stats |
+| `skillAmp` | `skill_amp` | match_user_stats |
+| `moveSpeed` | `move_speed` | match_user_stats |
+| `outOfCombatMoveSpeed` | `ooc_move_speed` | match_user_stats |
+| `sightRange` | `sight_range` | match_user_stats |
+| `attackRange` | `attack_range` | match_user_stats |
+| `adaptiveForce` | `adaptive_force` | match_user_stats |
+| `adaptiveForceAttack` | `adaptive_force_attack` | match_user_stats |
+| `adaptiveForceAmplify` | `adaptive_force_amp` | match_user_stats |
+| `criticalStrikeChance` | `critical_strike_chance` | match_user_stats |
+| `criticalStrikeDamage` | `critical_damage` | match_user_stats |
 | `coolDownReduction` | `cooldown_reduction` | match_user_stats |
+| `lifeSteal` | `life_steal` | match_user_stats |
+| `normalLifeSteal` | `normal_life_steal` | match_user_stats |
+| `skillLifeSteal` | `skill_life_steal` | match_user_stats |
+| `mmrBefore` | `mmr_before` | match_user_mmr |
+| `mmrAfter` | `mmr_after` | match_user_mmr |
+| `mmrGain` | `mmr_gain` | match_user_mmr |
+| `mmrGainInGame` | `mmr_gain_in_game` | match_user_mmr |
+| `mmrLossEntryCost` | `mmr_loss_entry_cost` | match_user_mmr |
+| `rankPoint` | `rank_point` | match_user_mmr |
 | `viewContribution` | `sight_score` | match_user_sight |
+| `addTelephotoCamera` | `camera_setup` | match_user_sight |
+| `removeTelephotoCamera` | `camera_remove` | match_user_sight |
 | `useReconDrone` | `basic_drone_setup` | match_user_sight |
 | `useEmpDrone` | `emp_drone_setup` | match_user_sight |
 | `equipFirstItemForLog` | `first_*` | match_user_equipment |
-| equipment | `last_*` | match_user_equipment |
+| `equipment` | `last_*` | match_user_equipment |
+| `bestWeapon` | `best_weapon` | match_user_equipment |
+| `bestWeaponLevel` | `best_weapon_level` | match_user_equipment |
+| `traitFirstCore` | trait_type=`first_core` | match_user_trait |
 | `traitFirstSub` | trait_type=`first_sub` | match_user_trait |
 | `traitSecondSub` | trait_type=`second_sub` | match_user_trait |
 | `creditSource` | 파싱 후 저장 | match_user_credit_acquisitions |
 | `totalVFCredits` | `gain_credit` | match_user_credit_time |
 | `usedVFCredits` | `used_credit` | match_user_credit_time |
 | `useGadget` | 파싱 후 저장 | match_user_gadget |
-| `getBuffCube*` | metric_type=`get_cube` | match_user_object |
+| `getBuffCubeRed` 등 | metric_type=`get_cube` | match_user_object |
 
 ---
 
@@ -750,43 +1013,89 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 
 | ID | 몬스터 |
 |----|--------|
-| 1 | 닭 (Chicken) |
-| 2 | 박쥐 (Bat) |
-| 3 | 들개 (Wild Dog) |
-| 4 | 늑대 (Wolf) |
-| 5 | 곰 (Bear) |
-| 6 | 멧돼지 (Boar) |
-| 7 | 위클라인 (Wickline) |
-| 8 | 알파 (Alpha) |
-| 9 | 오메가 (Omega) |
-| 10 | 감마 (Gamma) |
-| 12 | 뮤턴트 계열 |
+| 1 | 닭 |
+| 2 | 박쥐 |
+| 3 | 들개 |
+| 4 | 늑대 |
+| 5 | 곰 |
+| 6 | 멧돼지 |
+| 7 | 위클라인 |
+| 8 | 알파 |
+| 9 | 오메가 |
+| 10 | 감마 |
+| 12 | 변이 동물 계열 |
 
 ### 장비 슬롯 (equipment / `equipFirstItemForLog` 키)
 
 | 키 | 슬롯 |
 |----|------|
-| 0 | 무기 (Weapon) |
-| 1 | 갑옷 (Chest) |
-| 2 | 투구 (Head) |
-| 3 | 팔 (Arm) |
-| 4 | 다리 (Leg) |
+| 0 | 무기 |
+| 1 | 옷 |
+| 2 | 머리 |
+| 3 | 팔/장식 |
+| 4 | 다리 |
+
+### 전술 스킬 코드 (`tacticalSkillGroup`)
+
+| 코드 | L10N 검색 키 |
+|------|-------------|
+| 30 | Skill/Group/Name/4000000 |
+| 40 | Skill/Group/Name/4001000 |
+| 50 | Skill/Group/Name/4101000 |
+| 60 | Skill/Group/Name/4102000 |
+| 70 | Skill/Group/Name/4103000 |
+| 80 | Skill/Group/Name/4104000 |
+| 90 | Skill/Group/Name/4105000 |
+| 110 | Skill/Group/Name/4107000 |
+| 120 | Skill/Group/Name/4110000 |
+| 130 | Skill/Group/Name/4112000 |
+| 140 | Skill/Group/Name/4113000 |
+| 150 | Skill/Group/Name/4108000 |
+
+> [!TIP]
+> 전술 스킬 이름은 `l10n[검색 키]`로 조회합니다.
+
+### 가젯 스킬 코드 (`useGadget` 키)
+
+| 코드 | L10N 검색 키 |
+|------|-------------|
+| 8300301 | Skill/Group/Name/8300300 |
+| 8300101 | Skill/Group/Name/8300100 |
+| 8300201 | Skill/Group/Name/8300200 |
+| 8300401 | Skill/Group/Name/8300400 |
+| 8300501 | Skill/Group/Name/8300500 |
+| 8310201 | Skill/Group/Name/8310200 |
+
+### 리전 서버 (`serverCode`)
+
+| 코드 | 리전 |
+|------|------|
+| 10 | Asia (한국 — **수집 대상**) |
+| 12 | NA |
+| 13 | Europe |
+| 14 | South America |
+| 17 | Asia2 |
+| 18 | Asia3 |
 
 ### 매칭 모드 (`matchingMode`)
 
+> [!NOTE]
+> `matchingMode`는 게임 모드(Cobalt, union 등)와 매칭 타입(Normal, Ranked 등)의 조합으로 파생된 고유 식별자입니다.
+
 | 값 | 모드 |
 |----|------|
-| 2 | 일반 |
-| 3 | 랭크 (**수집 대상**) |
-| 6 | 코발트 |
+| 2 | 스쿼드 일반 |
+| 3 | 스쿼드 랭크 (**수집 대상**) |
+| 4 | 코발트 일반 |
+| 9 | 론울프 |
 
 ### 팀 모드 (`matchingTeamMode`)
 
 | 값 | 모드 |
 |----|------|
-| 1 | 솔로 |
-| 2 | 듀오 |
+| 1 | 론울프 |
 | 3 | 스쿼드 |
+| 4 | 코발트 프로토콜 |
 
 ---
 
@@ -794,6 +1103,7 @@ API에서 제공하는 크레딧 관련 필드는 매우 상세합니다.
 
 | 버전 | 날짜 | 변경 사항 |
 |------|------|----------|
+| v2.4 | 2026-03-16 | 실제 데이터(match_56000302_s9.json) + 공식 API 문서(v9.4.0) 기반 전면 업데이트: UID 불변성 오류 수정(닉네임 변경 시 변경됨), MatchingMode(코발트=4/론울프=9) · TeamMode(코발트=4) 수정, traitFirstCore 추가, 카메라 매핑 명확화, 미수집 필드 대폭 확장(COBALT 전용/Deprecated 구분), 전술스킬·가젯·리전서버 코드 표 추가, API↔DB 매핑 표 전면 재작성 |
 | v2.3 | 2026-03-09 | Alembic 38cbb6ad2222 기준 전체 컬럼 동기화, 소스 마스터 테이블 2개 추가, 테이블 수 32개로 수정 |
 | v2.2 | 2026-01-30 | 실제 API 응답 기반 미수집 필드 및 코드값 참조 추가 |
 | v2.1 | 2026-01-30 | Season 9 스키마 반영, user_num 체계 도입 |
